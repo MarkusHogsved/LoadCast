@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "LoadCast",
+        "description": "Add LoadCast. This early version does not create any entities yet – forecasting arrives in a coming release."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "LoadCast is already configured."
+    }
+  }
+}

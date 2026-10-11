@@ -1,22 +1,26 @@
 """LoadCast – household load forecasting for Home Assistant.
 
-Placeholder skeleton (v0.0.1). The integration currently does nothing; it
-exists so the repository has a valid HACS structure while the forecasting
-model is being built. See SPEC.md in the repository for the design.
+Skeleton (v0.0.2): the integration can be added from the UI but does not
+create any entities yet. See SPEC.md in the repository for the design.
 """
 
 from __future__ import annotations
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType
 
-DOMAIN = "loadcast"
+from .const import DOMAIN  # noqa: F401  (re-exported for convenience)
 
 
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up LoadCast.
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up LoadCast from a config entry.
 
-    Nothing to set up yet. Returning True keeps Home Assistant happy if the
-    integration is installed before the first functional release.
+    Nothing to set up yet – the forecasting coordinator and sensors arrive in
+    a later milestone. Returning True marks the entry as loaded.
     """
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry. No platforms are forwarded yet."""
     return True
