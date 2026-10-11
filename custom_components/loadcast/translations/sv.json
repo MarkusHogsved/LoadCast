@@ -67,7 +67,8 @@
         "data": {
           "window_days": "Historikfönster (dagar)",
           "horizon_hours": "Prognoshorisont (timmar)"
-        }
+        },
+        "description": "Historikfönstret är hur många dagar modellen tittar tillbaka. Hur mycket varje dag väger väljer modellen själv utifrån utfallet."
       }
     },
     "error": {
@@ -80,14 +81,28 @@
         "sensor": "En förbrukningssensor",
         "computed": "Beräkna från nät, sol och batteri"
       }
+    },
+    "horizon": {
+      "options": {
+        "24": "24 timmar",
+        "48": "48 timmar"
+      }
     }
   },
   "entity": {
     "sensor": {
-      "forecast_24h": { "name": "Prognos närmaste 24 h" },
-      "remaining_today": { "name": "Prognos resten av dagen" },
-      "next_hour": { "name": "Prognos nästa timme" },
-      "accuracy_yesterday": { "name": "Prognosfel igår" }
+      "forecast_24h": {
+        "name": "Prognos närmaste 24 h"
+      },
+      "remaining_today": {
+        "name": "Prognos resten av dagen"
+      },
+      "next_hour": {
+        "name": "Prognos nästa timme"
+      },
+      "accuracy_yesterday": {
+        "name": "Prognosfel igår"
+      }
     }
   },
   "services": {
@@ -95,11 +110,26 @@
       "name": "Hämta prognos",
       "description": "Prognostisera hushållets förbrukning mellan två tidpunkter.",
       "fields": {
-        "start": { "name": "Start", "description": "Standard: nu." },
-        "end": { "name": "Slut", "description": "Periodens slut." },
-        "percentile": { "name": "Percentil", "description": "50 = förväntat, 10 = lågt, 90 = högt." },
-        "components": { "name": "Komponenter", "description": "Bara dessa komponenter (t.ex. base, Värmepump). Standard: totalen." },
-        "config_entry_id": { "name": "LoadCast-post", "description": "Om du har flera." }
+        "start": {
+          "name": "Start",
+          "description": "Standard: nu."
+        },
+        "end": {
+          "name": "Slut",
+          "description": "Periodens slut."
+        },
+        "percentile": {
+          "name": "Percentil",
+          "description": "50 = förväntat, 10 = lågt, 90 = högt."
+        },
+        "components": {
+          "name": "Komponenter",
+          "description": "Bara dessa komponenter (t.ex. base, Värmepump). Standard: totalen."
+        },
+        "config_entry_id": {
+          "name": "LoadCast-post",
+          "description": "Om du har flera."
+        }
       }
     }
   }

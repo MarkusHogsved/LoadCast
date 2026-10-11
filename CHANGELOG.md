@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Model settings form now shows the current values: history window as a
+  number box (days) and a pre-selected forecast horizon. Short explanation
+  added to the form.
+
 ## 0.1.1
 
 - Temperature dependence is now chosen per component from outcomes, like the

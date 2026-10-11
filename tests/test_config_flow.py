@@ -128,3 +128,28 @@ async def test_options_add_and_remove_subload(hass: HomeAssistant) -> None:
         result["flow_id"], {CONF_SUBLOAD_NAME: "Heat pump"}
     )
     assert entry.options[CONF_SUBLOADS] == []
+
+
+async def test_options_settings_shows_current_values_and_stores_ints(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_LOAD_MODE: LOAD_MODE_SENSOR, CONF_TOTAL: "sensor.house"},
+        options={"window_days": 21, "horizon_hours": 24},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "settings"}
+    )
+    defaults = {str(k): k.default() for k in result["data_schema"].schema}
+    assert defaults == {"window_days": 21, "horizon_hours": "24"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"window_days": 35.0, "horizon_hours": "48"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["window_days"] == 35
+    assert entry.options["horizon_hours"] == 48

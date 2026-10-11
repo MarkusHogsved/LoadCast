@@ -227,21 +227,46 @@ class LoadCastOptionsFlow(OptionsFlow):
     async def async_step_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """History window and forecast horizon.
+
+        Explicit selectors so the form shows the current value: a number box
+        with unit, and a pre-selected horizon. Select values come back as
+        strings and are stored as ints.
+        """
         opts = self.config_entry.options
         if user_input is not None:
-            return self._save(**user_input)
+            return self._save(
+                **{
+                    CONF_WINDOW_DAYS: int(user_input[CONF_WINDOW_DAYS]),
+                    CONF_HORIZON_HOURS: int(user_input[CONF_HORIZON_HOURS]),
+                }
+            )
+        window = int(opts.get(CONF_WINDOW_DAYS, DEFAULT_WINDOW_DAYS))
+        horizon = int(opts.get(CONF_HORIZON_HOURS, DEFAULT_HORIZON_HOURS))
         return self.async_show_form(
             step_id="settings",
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_WINDOW_DAYS,
-                        default=opts.get(CONF_WINDOW_DAYS, DEFAULT_WINDOW_DAYS),
-                    ): vol.All(int, vol.Range(min=7, max=90)),
+                        CONF_WINDOW_DAYS, default=window
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=7,
+                            max=90,
+                            step=1,
+                            unit_of_measurement="d",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
                     vol.Required(
-                        CONF_HORIZON_HOURS,
-                        default=opts.get(CONF_HORIZON_HOURS, DEFAULT_HORIZON_HOURS),
-                    ): vol.In([24, 48]),
+                        CONF_HORIZON_HOURS, default=str(horizon)
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=["24", "48"],
+                            mode=selector.SelectSelectorMode.LIST,
+                            translation_key="horizon",
+                        )
+                    ),
                 }
             ),
         )

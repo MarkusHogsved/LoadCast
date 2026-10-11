@@ -67,7 +67,8 @@
         "data": {
           "window_days": "History window (days)",
           "horizon_hours": "Forecast horizon (hours)"
-        }
+        },
+        "description": "The history window is how many days the model looks back. How much each day counts is chosen by the model itself from outcomes."
       }
     },
     "error": {
@@ -79,6 +80,12 @@
       "options": {
         "sensor": "One consumption sensor",
         "computed": "Compute from grid, solar and battery"
+      }
+    },
+    "horizon": {
+      "options": {
+        "24": "24 hours",
+        "48": "48 hours"
       }
     }
   },
