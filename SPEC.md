@@ -86,10 +86,14 @@ Deliberately simple, explainable and testable. One model per component
   (weighted mean). `b` is shrunk towards the component's all-day slope to
   avoid noisy per-hour slopes.
 - **Clamp**: predictions ≥ 0.
-- **Regime changes**: the recency half-life makes a sub-load that stops
-  (heat pump failure) or starts dominate within a few days. A service
-  `loadcast.reset_learning` (component, from date) discards history before a
-  known change.
+- **Regime changes – adaptive memory** (implemented in v0.1): instead of one
+  fixed half-life, every fit replays the last 3 days with candidate
+  half-lives (0.75, 1.5, 3, 7, 14 days) and picks the one with the lowest
+  day-ahead error, preferring the longest one that is practically as good
+  (within 5 % of the best error or 2 % of a day's energy). A stable component
+  keeps a long memory; one that changes level switches to a short memory
+  within a day or two. A `loadcast.reset_learning` service for known changes
+  may still be added if the adaptive memory proves too slow in practice.
 - **Uncertainty**: per slot, weighted residual quantiles → P10 / P90.
 - **15-min output**: hourly prediction spread evenly over its quarters (v1).
 
@@ -105,6 +109,7 @@ data shows a need.
   shape as Solcast's `detailedForecast` so existing template patterns carry over.
   Attribute `components`: same list per component.
 - `sensor.loadcast_<name>_remaining_today` – forecast kWh from now until midnight.
+- `sensor.loadcast_<name>_next_hour` – forecast kWh for the next 60 minutes.
 - Service `loadcast.get_forecast` (returns response): `start`, `end`,
   optional `components`, optional `percentile` → kWh. Lets a planner ask
   "how much until the evening peak at 19:30?" without template loops.
@@ -130,10 +135,10 @@ data shows a need.
 
 ## 10. Milestones
 
-1. Model library + fixtures + tests (no HA).
-2. Integration skeleton: config flow (consumption-sensor mode), forecast sensor.
-3. Sub-loads, computed-load mode, temperature + weather forecast.
-4. `get_forecast` service, accuracy sensors, diagnostics.
+1. ✅ Model library + fixtures + tests (no HA).
+2. ✅ Integration skeleton: config flow (consumption-sensor mode), forecast sensor.
+3. ✅ Sub-loads, computed-load mode, temperature + weather forecast.
+4. ✅ `get_forecast` service, accuracy sensor. (Diagnostics download: todo.)
 5. HACS release, README with consumption examples (battery planner, EV).
 6. Migrate the author's battery planner to consume LoadCast.
 

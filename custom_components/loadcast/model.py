@@ -167,7 +167,9 @@ class ComponentModel:
         var = sxx / sw  # weighted within-slot temperature variance
         return raw * var / (var + SLOPE_SHRINK_C2)
 
-    def _slot_stats(self, hour: int, weekend: bool) -> tuple[float, float, float, float]:
+    def _slot_stats(
+        self, hour: int, weekend: bool
+    ) -> tuple[float, float, float, float]:
         """Return (intercept, mean_temp, p10_residual, p90_residual) for a slot."""
         key = (hour, weekend)
         if key in self._slot_cache:
@@ -264,6 +266,10 @@ class AdaptiveComponentModel:
     def slope_kwh_per_c(self) -> float:
         return self._model.slope_kwh_per_c if self._model else 0.0
 
+    @property
+    def fitted_at(self) -> datetime | None:
+        return self._model.fitted_at if self._model else None
+
     def _new(self, half_life: float) -> ComponentModel:
         return ComponentModel(
             tz=self.tz,
@@ -287,9 +293,7 @@ class AdaptiveComponentModel:
                 by_day[day].append(s)
 
         errors: dict[float, float] = {}
-        day_totals = [
-            sum(s.kwh for s in ds) for ds in by_day.values() if len(ds) >= 20
-        ]
+        day_totals = [sum(s.kwh for s in ds) for ds in by_day.values() if len(ds) >= 20]
         mean_day = sum(day_totals) / len(day_totals) if day_totals else 0.0
         for hl in self.candidates:
             abs_err = 0.0

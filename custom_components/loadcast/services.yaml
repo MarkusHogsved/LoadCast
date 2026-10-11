@@ -1,0 +1,32 @@
+get_forecast:
+  fields:
+    start:
+      required: false
+      example: "2026-10-11 16:00:00"
+      selector:
+        datetime:
+    end:
+      required: true
+      example: "2026-10-11 19:30:00"
+      selector:
+        datetime:
+    percentile:
+      required: false
+      default: 50
+      selector:
+        select:
+          options:
+            - "10"
+            - "50"
+            - "90"
+    components:
+      required: false
+      example: "base"
+      selector:
+        text:
+          multiple: true
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: loadcast

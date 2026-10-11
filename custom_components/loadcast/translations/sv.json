@@ -1,0 +1,106 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "LoadCast",
+        "description": "LoadCast lär sig hushållets förbrukning från recorder-historiken och prognostiserar kommande 24–48 timmar. Välj först hur totalförbrukningen mäts.",
+        "data": {
+          "name": "Namn",
+          "load_mode": "Källa för totalförbrukning"
+        }
+      },
+      "sensor": {
+        "title": "Sensor för totalförbrukning",
+        "description": "En sensor som mäter hela hushållets förbrukning: energi (kWh, total increasing) eller effekt (W). Den behöver långtidsstatistik.",
+        "data": {
+          "total_sensor": "Förbrukningssensor"
+        }
+      },
+      "computed": {
+        "title": "Beräkna förbrukning från energiflöden",
+        "description": "Förbrukning = nätimport − nätexport + sol + batteri ur − batteri in. Hoppa över det du inte har.",
+        "data": {
+          "grid_import": "Nätimport",
+          "grid_export": "Nätexport",
+          "solar": "Solproduktion",
+          "battery_out": "Batteriurladdning",
+          "battery_in": "Batteriladdning"
+        }
+      },
+      "temperature": {
+        "title": "Temperatur (valfritt)",
+        "description": "Med en utetemperatursensor lär sig LoadCast hur förbrukningen beror på temperaturen, och med en väderentitet används timprognosen för kommande timmar.",
+        "data": {
+          "temperature_sensor": "Utetemperatursensor",
+          "weather_entity": "Väderprognos"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "LoadCast-alternativ",
+        "menu_options": {
+          "add_subload": "Lägg till en mätt dellast",
+          "remove_subload": "Ta bort en dellast",
+          "settings": "Modellinställningar"
+        }
+      },
+      "add_subload": {
+        "title": "Lägg till dellast",
+        "description": "En separat mätt last (värmepump, elbilsladdare, pool …) får en egen modell, så att en förändring – till exempel att värmepumpen går sönder – lärs in inom några dagar. Bocka ur 'räkna med i totalen' för laster som en annan automation planerar själv (oftast elbilsladdning).",
+        "data": {
+          "name": "Namn",
+          "sensor": "Energisensor",
+          "include_in_total": "Räkna med i totalprognosen"
+        }
+      },
+      "remove_subload": {
+        "title": "Ta bort dellast",
+        "data": {
+          "name": "Dellast"
+        }
+      },
+      "settings": {
+        "title": "Modellinställningar",
+        "data": {
+          "window_days": "Historikfönster (dagar)",
+          "horizon_hours": "Prognoshorisont (timmar)"
+        }
+      }
+    },
+    "error": {
+      "invalid_name": "Använd ett unikt namn (inte 'base')."
+    }
+  },
+  "selector": {
+    "load_mode": {
+      "options": {
+        "sensor": "En förbrukningssensor",
+        "computed": "Beräkna från nät, sol och batteri"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "forecast_24h": { "name": "Prognos närmaste 24 h" },
+      "remaining_today": { "name": "Prognos resten av dagen" },
+      "next_hour": { "name": "Prognos nästa timme" },
+      "accuracy_yesterday": { "name": "Prognosfel igår" }
+    }
+  },
+  "services": {
+    "get_forecast": {
+      "name": "Hämta prognos",
+      "description": "Prognostisera hushållets förbrukning mellan två tidpunkter.",
+      "fields": {
+        "start": { "name": "Start", "description": "Standard: nu." },
+        "end": { "name": "Slut", "description": "Periodens slut." },
+        "percentile": { "name": "Percentil", "description": "50 = förväntat, 10 = lågt, 90 = högt." },
+        "components": { "name": "Komponenter", "description": "Bara dessa komponenter (t.ex. base, Värmepump). Standard: totalen." },
+        "config_entry_id": { "name": "LoadCast-post", "description": "Om du har flera." }
+      }
+    }
+  }
+}

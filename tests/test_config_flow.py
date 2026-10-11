@@ -1,31 +1,130 @@
-"""Config flow tests."""
+"""Config and options flow tests."""
+
+from __future__ import annotations
+
+from unittest.mock import patch
 
 from homeassistant import config_entries
+from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.loadcast.const import DOMAIN
+from custom_components.loadcast.const import (
+    CONF_BATTERY_IN,
+    CONF_BATTERY_OUT,
+    CONF_GRID_EXPORT,
+    CONF_GRID_IMPORT,
+    CONF_LOAD_MODE,
+    CONF_SOLAR,
+    CONF_SUBLOAD_INCLUDE,
+    CONF_SUBLOAD_NAME,
+    CONF_SUBLOAD_SENSOR,
+    CONF_SUBLOADS,
+    CONF_TEMPERATURE,
+    CONF_TOTAL,
+    DOMAIN,
+    LOAD_MODE_COMPUTED,
+    LOAD_MODE_SENSOR,
+)
 
 
-async def test_user_flow_creates_entry(hass: HomeAssistant) -> None:
+async def _start(hass: HomeAssistant, mode: str):
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: "Hemma", CONF_LOAD_MODE: mode}
+    )
 
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+async def test_sensor_mode_flow(hass: HomeAssistant) -> None:
+    result = await _start(hass, LOAD_MODE_SENSOR)
+    assert result["step_id"] == "sensor"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_TOTAL: "sensor.house_power"}
+    )
+    assert result["step_id"] == "temperature"
+    with patch("custom_components.loadcast.async_setup_entry", return_value=True):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TEMPERATURE: "sensor.outdoor"}
+        )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "LoadCast"
+    assert result["title"] == "Hemma"
+    assert result["data"] == {
+        CONF_LOAD_MODE: LOAD_MODE_SENSOR,
+        CONF_TOTAL: "sensor.house_power",
+        CONF_TEMPERATURE: "sensor.outdoor",
+    }
 
 
-async def test_second_instance_aborts(hass: HomeAssistant) -> None:
-    first = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
+async def test_computed_mode_flow(hass: HomeAssistant) -> None:
+    result = await _start(hass, LOAD_MODE_COMPUTED)
+    assert result["step_id"] == "computed"
+    flows = {
+        CONF_GRID_IMPORT: "sensor.imp",
+        CONF_GRID_EXPORT: "sensor.exp",
+        CONF_SOLAR: "sensor.sol",
+        CONF_BATTERY_OUT: "sensor.bout",
+        CONF_BATTERY_IN: "sensor.bin",
+    }
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], flows)
+    with patch("custom_components.loadcast.async_setup_entry", return_value=True):
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {CONF_LOAD_MODE: LOAD_MODE_COMPUTED, **flows}
+
+
+async def test_options_add_and_remove_subload(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_LOAD_MODE: LOAD_MODE_SENSOR, CONF_TOTAL: "sensor.house"},
     )
-    await hass.config_entries.flow.async_configure(first["flow_id"], {})
+    entry.add_to_hass(hass)
 
-    second = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.MENU
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_subload"}
     )
-    assert second["type"] is FlowResultType.ABORT
-    assert second["reason"] == "single_instance_allowed"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_SUBLOAD_NAME: "Heat pump",
+            CONF_SUBLOAD_SENSOR: "sensor.hp_energy",
+            CONF_SUBLOAD_INCLUDE: True,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SUBLOADS] == [
+        {
+            CONF_SUBLOAD_NAME: "Heat pump",
+            CONF_SUBLOAD_SENSOR: "sensor.hp_energy",
+            CONF_SUBLOAD_INCLUDE: True,
+        }
+    ]
+
+    # Duplicate and reserved names are rejected
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_subload"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_SUBLOAD_NAME: "base",
+            CONF_SUBLOAD_SENSOR: "sensor.x",
+            CONF_SUBLOAD_INCLUDE: True,
+        },
+    )
+    assert result["errors"] == {CONF_SUBLOAD_NAME: "invalid_name"}
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "remove_subload"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_SUBLOAD_NAME: "Heat pump"}
+    )
+    assert entry.options[CONF_SUBLOADS] == []

@@ -130,7 +130,9 @@ def test_real_heat_pump_outage_is_learned():
         s.kwh for s in data["heatpump"] if s.start.astimezone(TZ).date() == day.date()
     )
     temps = {
-        s.start: s.temp_c for s in data["heatpump"] if s.start.astimezone(TZ).date() == day.date()
+        s.start: s.temp_c
+        for s in data["heatpump"]
+        if s.start.astimezone(TZ).date() == day.date()
     }
     forecast = sum(m.predict(t, temp).kwh for t, temp in temps.items())
     assert abs(forecast - actual) < 2.5

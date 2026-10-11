@@ -11,10 +11,14 @@ Run:  python -m tests.backtest
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from custom_components.loadcast.model import AdaptiveComponentModel, ComponentModel, Sample
+from custom_components.loadcast.model import (
+    AdaptiveComponentModel,
+    ComponentModel,
+    Sample,
+)
 
 from .fixtures.loader import load_house
 
@@ -48,7 +52,7 @@ def run() -> list[dict]:
         forecast = 0.0
         per_comp = {}
         for comp in COMPONENTS:
-            model = (AdaptiveComponentModel(tz=TZ) if ADAPTIVE else ComponentModel(tz=TZ))
+            model = AdaptiveComponentModel(tz=TZ) if ADAPTIVE else ComponentModel(tz=TZ)
             model.fit(data[comp], now=midnight)
             day_samples = [
                 s for s in data[comp] if s.start.astimezone(TZ).date() == day
@@ -57,11 +61,13 @@ def run() -> list[dict]:
                 break
             f = sum(model.predict(s.start, s.temp_c).kwh for s in day_samples)
             a = sum(s.kwh for s in day_samples)
-            per_comp[comp] = (f, a, getattr(model, 'half_life_days', None))
+            per_comp[comp] = (f, a, getattr(model, "half_life_days", None))
             forecast += f
             actual += a
         else:
-            temps = [s.temp_c for s in data["base"] if s.start.astimezone(TZ).date() == day]
+            temps = [
+                s.temp_c for s in data["base"] if s.start.astimezone(TZ).date() == day
+            ]
             t_mean = sum(temps) / len(temps)
             results.append(
                 {
@@ -89,4 +95,6 @@ if __name__ == "__main__":
             f"{r['day']}  {r['actual']:6.1f}  {r['loadcast']:8.1f}  {r['legacy']:6.1f}"
             f"   {hf:4.1f}/{ha:4.1f}   hl hp={hl} base={bhl}"
         )
-    print(f"\nMAPE loadcast {mape(rows, 'loadcast'):.1f} %   legacy {mape(rows, 'legacy'):.1f} %")
+    print(
+        f"\nMAPE loadcast {mape(rows, 'loadcast'):.1f} %   legacy {mape(rows, 'legacy'):.1f} %"
+    )

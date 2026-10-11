@@ -3,11 +3,127 @@
     "step": {
       "user": {
         "title": "LoadCast",
-        "description": "Add LoadCast. This early version does not create any entities yet – forecasting arrives in a coming release."
+        "description": "LoadCast learns your household's consumption from recorder history and forecasts the next 24–48 hours. First choose how total consumption is measured.",
+        "data": {
+          "name": "Name",
+          "load_mode": "Total consumption source"
+        }
+      },
+      "sensor": {
+        "title": "Total consumption sensor",
+        "description": "A sensor measuring the whole household's consumption: an energy sensor (kWh, total increasing) or a power sensor (W). It needs long-term statistics.",
+        "data": {
+          "total_sensor": "Consumption sensor"
+        }
+      },
+      "computed": {
+        "title": "Compute consumption from energy flows",
+        "description": "Consumption = grid import − grid export + solar + battery discharge − battery charge. Leave out what you don't have.",
+        "data": {
+          "grid_import": "Grid import",
+          "grid_export": "Grid export",
+          "solar": "Solar production",
+          "battery_out": "Battery discharge",
+          "battery_in": "Battery charge"
+        }
+      },
+      "temperature": {
+        "title": "Temperature (optional)",
+        "description": "With an outdoor temperature sensor LoadCast learns how consumption depends on temperature, and with a weather entity it uses the hourly forecast for future hours.",
+        "data": {
+          "temperature_sensor": "Outdoor temperature sensor",
+          "weather_entity": "Weather forecast"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "LoadCast options",
+        "menu_options": {
+          "add_subload": "Add a metered sub-load",
+          "remove_subload": "Remove a sub-load",
+          "settings": "Model settings"
+        }
+      },
+      "add_subload": {
+        "title": "Add sub-load",
+        "description": "A separately metered load (heat pump, EV charger, pool …) gets its own model, so a change in it – such as a heat pump failing – is learned within days. Untick 'include in total' for loads another automation plans itself (typically EV charging).",
+        "data": {
+          "name": "Name",
+          "sensor": "Energy sensor",
+          "include_in_total": "Include in total forecast"
+        }
+      },
+      "remove_subload": {
+        "title": "Remove sub-load",
+        "data": {
+          "name": "Sub-load"
+        }
+      },
+      "settings": {
+        "title": "Model settings",
+        "data": {
+          "window_days": "History window (days)",
+          "horizon_hours": "Forecast horizon (hours)"
+        }
       }
     },
-    "abort": {
-      "single_instance_allowed": "LoadCast is already configured."
+    "error": {
+      "invalid_name": "Use a unique name (not 'base')."
+    }
+  },
+  "selector": {
+    "load_mode": {
+      "options": {
+        "sensor": "One consumption sensor",
+        "computed": "Compute from grid, solar and battery"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "forecast_24h": {
+        "name": "Forecast next 24 h"
+      },
+      "remaining_today": {
+        "name": "Forecast rest of today"
+      },
+      "next_hour": {
+        "name": "Forecast next hour"
+      },
+      "accuracy_yesterday": {
+        "name": "Forecast error yesterday"
+      }
+    }
+  },
+  "services": {
+    "get_forecast": {
+      "name": "Get forecast",
+      "description": "Forecast household consumption between two times.",
+      "fields": {
+        "start": {
+          "name": "Start",
+          "description": "Default: now."
+        },
+        "end": {
+          "name": "End",
+          "description": "End of the period."
+        },
+        "percentile": {
+          "name": "Percentile",
+          "description": "50 = expected, 10 = low, 90 = high."
+        },
+        "components": {
+          "name": "Components",
+          "description": "Only these components (e.g. base, Heat pump). Default: the total."
+        },
+        "config_entry_id": {
+          "name": "LoadCast entry",
+          "description": "If you have several."
+        }
+      }
     }
   }
 }
