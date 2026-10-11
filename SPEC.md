@@ -139,7 +139,6 @@ data shows a need.
 
 ## 11. Open questions
 
-- License (MIT suggested for an HA integration).
 - Should EV charging be forecast at all, or only offered as an exclusion?
 - Minimum history before the forecast is published (proposal: 3 days, with
   `available` false and a repair issue until then).

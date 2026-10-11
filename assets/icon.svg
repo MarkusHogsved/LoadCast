@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- LoadCast icon: a house whose load curve runs from measured history
+       (solid white) through "now" (dot) into the forecast (dashed amber)
+       with its widening uncertainty band. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E3B57"/>
+      <stop offset="1" stop-color="#0F7C77"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background tile -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bg)"/>
+
+  <!-- House outline -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M92 250 L256 108 L420 250"/>
+    <path d="M136 226 V404 H376 V226"/>
+  </g>
+
+  <!-- Forecast uncertainty band (P10–P90), widening into the future -->
+  <path d="M256 304 C 276 300, 282 246, 304 246 C 326 246, 330 282, 346 282
+           L 346 346 C 330 346, 324 296, 304 296 C 284 296, 276 308, 256 304 Z"
+        fill="#FFB547" fill-opacity="0.30"/>
+
+  <!-- Measured history (solid) -->
+  <path d="M166 358 C 186 358, 190 312, 212 312 C 234 312, 236 304, 256 304"
+        fill="none" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Forecast (dashed) -->
+  <path d="M256 304 C 276 304, 282 270, 304 270 C 326 270, 330 314, 346 314"
+        fill="none" stroke="#FFB547" stroke-width="20" stroke-linecap="round" stroke-dasharray="14 22"/>
+
+  <!-- Now -->
+  <circle cx="256" cy="304" r="20" fill="#FFB547" stroke="#FFFFFF" stroke-width="8"/>
+</svg>

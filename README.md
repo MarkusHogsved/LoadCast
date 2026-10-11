@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon.svg" width="128" alt="LoadCast"></p>
+
 # LoadCast
 
 **Household load forecasting for Home Assistant** – learned from your own
@@ -30,4 +32,10 @@ per sub-load, and adapts in both directions.
 
 ## Installation
 
-Not released yet. Will be installable via HACS as a custom repository.
+Can be added to HACS as a custom repository (type *Integration*), but the
+current version is an empty skeleton – it installs cleanly and does nothing
+until the first functional release.
+
+## License
+
+MIT – see [LICENSE](LICENSE).
