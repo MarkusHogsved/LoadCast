@@ -66,6 +66,7 @@ class ComponentInfo:
     included: bool
     ready: bool
     half_life_days: float
+    uses_temperature: bool
     slope_kwh_per_c: float
     samples: int
 
@@ -303,6 +304,7 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
                 included=included.get(n, True),
                 ready=m.ready,
                 half_life_days=m.half_life_days,
+                uses_temperature=m.uses_temperature,
                 slope_kwh_per_c=m.slope_kwh_per_c,
                 samples=len(self._series.get(n, [])),
             )

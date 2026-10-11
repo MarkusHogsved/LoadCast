@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1
+
+- Temperature dependence is now chosen per component from outcomes, like the
+  memory length: each fit replays the last days with and without temperature
+  and drops a slope that makes the forecasts noticeably worse. A load that
+  only happened to coincide with the weather (typically EV charging) loses its
+  spurious slope; heating keeps its real one. No new setting needed.
+- New attribute `uses_temperature` per component on the 24 h forecast sensor.
+- Backtest on the real-house data improves from 11.3 % to 10.7 % daily MAPE.
+
 ## 0.1.0
 
 First functional release.

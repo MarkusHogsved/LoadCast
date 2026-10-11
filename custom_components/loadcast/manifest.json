@@ -1,13 +1,17 @@
 {
   "domain": "loadcast",
   "name": "LoadCast",
-  "codeowners": ["@MarkusHogsved"],
+  "codeowners": [
+    "@MarkusHogsved"
+  ],
   "config_flow": true,
-  "dependencies": ["recorder"],
+  "dependencies": [
+    "recorder"
+  ],
   "documentation": "https://github.com/MarkusHogsved/LoadCast",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/MarkusHogsved/LoadCast/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.1.1"
 }

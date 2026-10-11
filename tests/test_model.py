@@ -145,3 +145,36 @@ def test_backtest_beats_legacy_regression():
     legacy = backtest.mape(rows, "legacy")
     assert loadcast < 13.0
     assert loadcast < legacy - 5
+
+
+def test_adaptive_drops_spurious_temperature_slope():
+    """An EV-like load that only *happened* to coincide with warm days in the
+    history must not keep a temperature slope when that slope hurts."""
+    samples = []
+    for i, t in enumerate(hours(17)):
+        day = i // 24
+        if day < 14:
+            # History: charging (2 kWh/h) on exactly the warm days
+            warm = day % 2 == 0
+            temp = 14.0 if warm else 6.0
+            kwh = 2.0 if warm else 0.0
+        else:
+            # Recent days: warm, but no charging – the "slope" was a fluke
+            temp, kwh = 14.0, 0.0 if day != 15 else 2.0
+        samples.append(Sample(t, kwh, temp))
+    m = AdaptiveComponentModel(tz=TZ)
+    m.fit(samples, now=START + timedelta(days=17))
+    assert m.uses_temperature is False
+    assert m.slope_kwh_per_c == 0.0
+
+
+def test_adaptive_keeps_real_heating_slope():
+    """Heating that truly follows temperature keeps its slope."""
+    samples = []
+    for i, t in enumerate(hours(21)):
+        temp = 5 + 8 * math.sin(i / 29)
+        samples.append(Sample(t, max(1.5 - 0.1 * temp, 0), temp))
+    m = AdaptiveComponentModel(tz=TZ)
+    m.fit(samples, now=START + timedelta(days=21))
+    assert m.uses_temperature is True
+    assert m.slope_kwh_per_c < -0.05

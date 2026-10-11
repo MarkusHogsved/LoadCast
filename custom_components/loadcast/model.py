@@ -255,7 +255,10 @@ class AdaptiveComponentModel:
     use_temperature: bool = True
 
     half_life_days: float = DEFAULT_HALF_LIFE_DAYS
-    errors: dict[float, float] = field(default_factory=dict)
+    # Whether the chosen model uses temperature. Decided per fit from
+    # outcomes, like the half-life (only possible when use_temperature=True).
+    uses_temperature: bool = True
+    errors: dict[tuple[float, bool], float] = field(default_factory=dict)
     _model: ComponentModel | None = field(default=None, repr=False)
 
     @property
@@ -270,16 +273,23 @@ class AdaptiveComponentModel:
     def fitted_at(self) -> datetime | None:
         return self._model.fitted_at if self._model else None
 
-    def _new(self, half_life: float) -> ComponentModel:
+    def _new(self, half_life: float, use_temperature: bool) -> ComponentModel:
         return ComponentModel(
             tz=self.tz,
             half_life_days=half_life,
             window_days=self.window_days,
-            use_temperature=self.use_temperature,
+            use_temperature=use_temperature,
         )
 
     def fit(self, samples: list[Sample], now: datetime) -> None:
-        """Select the best half-life on recent days, then fit with it."""
+        """Select the best half-life and temperature use on recent days.
+
+        Candidates are every half-life, with and without temperature. A
+        temperature slope is only kept if it does not make the replayed
+        forecasts noticeably worse – so a load that merely *happened* to
+        correlate with the weather (an EV charger) loses its spurious slope,
+        while heating keeps its real one.
+        """
         local_now = now.astimezone(self.tz)
         today = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -292,41 +302,51 @@ class AdaptiveComponentModel:
             if day in by_day:
                 by_day[day].append(s)
 
-        errors: dict[float, float] = {}
+        has_temps = any(s.temp_c is not None for s in samples)
+        temp_options = (
+            (True, False) if (self.use_temperature and has_temps) else (False,)
+        )
+
+        errors: dict[tuple[float, bool], float] = {}
         day_totals = [sum(s.kwh for s in ds) for ds in by_day.values() if len(ds) >= 20]
         mean_day = sum(day_totals) / len(day_totals) if day_totals else 0.0
-        for hl in self.candidates:
-            abs_err = 0.0
-            used = 0
-            for day_start, day_samples in by_day.items():
-                if len(day_samples) < 20:
-                    continue  # incomplete day, not a fair test
-                m = self._new(hl)
-                m.fit(samples, now=day_start)
-                if not m.ready:
-                    continue
-                f = sum(m.predict(s.start, s.temp_c).kwh for s in day_samples)
-                a = sum(s.kwh for s in day_samples)
-                abs_err += abs(f - a)
-                used += 1
-            if used:
-                errors[hl] = abs_err / used
+        for use_temp in temp_options:
+            for hl in self.candidates:
+                abs_err = 0.0
+                used = 0
+                for day_start, day_samples in by_day.items():
+                    if len(day_samples) < 20:
+                        continue  # incomplete day, not a fair test
+                    m = self._new(hl, use_temp)
+                    m.fit(samples, now=day_start)
+                    if not m.ready:
+                        continue
+                    f = sum(m.predict(s.start, s.temp_c).kwh for s in day_samples)
+                    a = sum(s.kwh for s in day_samples)
+                    abs_err += abs(f - a)
+                    used += 1
+                if used:
+                    errors[(hl, use_temp)] = abs_err / used
 
         self.errors = errors
         if errors:
-            # Prefer the longest half-life whose error is practically as good
-            # as the best: within 5 % of it, or within 2 % of a typical day's
-            # energy (differences that small are noise, not signal). Equal
-            # accuracy with more memory means a steadier forecast.
+            # Among candidates that are practically as good as the best –
+            # within 5 % of its error, or within 2 % of a typical day's energy
+            # (differences that small are noise, not signal) – prefer:
+            #   1. keeping temperature (a real heating slope matters most on
+            #      the cold day that hasn't happened yet), then
+            #   2. the longest memory (steadier forecast).
             best = min(errors.values())
             tolerance = max(best * 0.05, mean_day * 0.02)
-            self.half_life_days = max(
-                hl for hl, e in errors.items() if e <= best + tolerance + 1e-9
+            good = [k for k, e in errors.items() if e <= best + tolerance + 1e-9]
+            self.half_life_days, self.uses_temperature = max(
+                good, key=lambda k: (k[1], k[0])
             )
         else:
             self.half_life_days = DEFAULT_HALF_LIFE_DAYS
+            self.uses_temperature = self.use_temperature and has_temps
 
-        self._model = self._new(self.half_life_days)
+        self._model = self._new(self.half_life_days, self.uses_temperature)
         self._model.fit(samples, now=now)
 
     def predict(self, start: datetime, temp_c: float | None = None) -> Prediction:

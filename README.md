@@ -20,7 +20,7 @@ energy that is never needed.
 LoadCast learns the real profile continuously, per sub-load, and **chooses its
 own memory length from outcomes**: every hour it replays the last few days with
 several candidate memory lengths and uses the one that would have forecast
-best. A stable house gets a steady, long-memory forecast; when a load changes
+best – and whether temperature actually helps. A stable house gets a steady, long-memory forecast; when a load changes
 level, short memory wins and the forecast follows within days – in both
 directions.
 
@@ -28,7 +28,7 @@ On the author's house (28 days of real data, see `tests/backtest.py`):
 
 | | Daily forecast error (MAPE) |
 |---|---|
-| LoadCast | **11.3 %** |
+| LoadCast | **10.7 %** |
 | Hand-tuned temperature regression it replaces | 19.2 % |
 
 The regression kept planning ~30 kWh/day for a heat pump that had failed;
