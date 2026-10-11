@@ -1,0 +1,56 @@
+name: Release
+
+# Creates a tag + GitHub release whenever the version in manifest.json is
+# bumped on main. Release notes come from CHANGELOG.md (the section for that
+# version). Bump the version, add a changelog section, push – done.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - custom_components/loadcast/manifest.json
+      - CHANGELOG.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(python3 -c "import json;print(json.load(open('custom_components/loadcast/manifest.json'))['version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$version" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract release notes
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          python3 - "${{ steps.version.outputs.version }}" > notes.md <<'EOF'
+          import re, sys
+          version = sys.argv[1]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"^## \[?{re.escape(version)}\]?.*?$(.*?)(?=^## |\Z)", text, re.S | re.M)
+          print(m.group(1).strip() if m else f"LoadCast {version}")
+          EOF
+
+      - name: Create release
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --target "$GITHUB_SHA" \
+            --title "LoadCast ${{ steps.version.outputs.version }}" \
+            --notes-file notes.md
