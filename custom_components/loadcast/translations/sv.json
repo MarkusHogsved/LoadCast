@@ -131,6 +131,24 @@
           "description": "Om du har flera."
         }
       }
+    },
+    "mark_change": {
+      "name": "Markera en förändring",
+      "description": "En komponents förbrukning har ändrats av en känd orsak (värmepumpen lagad eller utbytt, en ny apparat). LoadCast glömmer komponentens historik före förändringen och lär om från den nya nivån. Tills det finns ett dygn ny data rapporterar prognosen ready=false.",
+      "fields": {
+        "component": {
+          "name": "Komponent",
+          "description": "'base' eller namnet på en dellast, t.ex. Värmepump."
+        },
+        "since": {
+          "name": "Sedan",
+          "description": "När förändringen skedde. Standard: nu."
+        },
+        "config_entry_id": {
+          "name": "LoadCast-post",
+          "description": "Om du har flera."
+        }
+      }
     }
   }
 }

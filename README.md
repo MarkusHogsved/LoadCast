@@ -45,6 +45,8 @@ LoadCast learned the new level within days.
 - P10 / P90 uncertainty band
 - Daily forecast-vs-actual accuracy sensor
 - `loadcast.get_forecast` service for "how much until …?" questions
+- `loadcast.mark_change` service to relearn a component after a known change
+  (a repaired heat pump) instead of waiting for the adaptive memory
 - Native integration: works on Container, Core and OS installs, no add-on
 
 ## Installation
@@ -108,6 +110,26 @@ the service pro-rates partial hours and is the precise way):
 
 Use the P90 value where running short is expensive (a battery reserve),
 and P50 where you want the expected outcome.
+
+## After a known change
+
+The adaptive memory follows a load that changes level within a couple of
+days. When you *know* something changed – the heat pump was repaired, a new
+appliance was installed – tell LoadCast, and that component starts over:
+
+```yaml
+- action: loadcast.mark_change
+  data:
+    component: Heat pump        # 'base' or a sub-load name
+    since: "2026-10-13 11:00"   # optional, default now
+```
+
+History before `since` is ignored for that component. Until it has 24 hours
+of new data the forecast reports `ready: false` (the sensors become
+unavailable), so a consumer that checks `ready` falls back to its own
+estimate instead of using a half-learned one. The marker is shown as
+`changed_since` in the `components` attribute. The 7-day accuracy replay
+skips days before the marker.
 
 ## Development
 

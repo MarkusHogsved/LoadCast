@@ -69,6 +69,9 @@ def _forecast_attrs(c: LoadCastCoordinator) -> dict[str, Any]:
                 "uses_temperature": info.uses_temperature,
                 "temperature_slope_kwh_per_c": round(info.slope_kwh_per_c, 4),
                 "samples": info.samples,
+                "changed_since": info.changed_since.isoformat()
+                if info.changed_since
+                else None,
                 "forecast_24h_kwh": round(
                     sum(
                         h.components[name].kwh

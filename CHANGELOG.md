@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3
+
+- New service `loadcast.mark_change` (component, optional `since`): forget a
+  component's history before a known change – a repaired heat pump, a new
+  appliance – and relearn from the new level, instead of waiting a couple of
+  days for the adaptive memory. Until the component has 24 hours of new data
+  the forecast reports `ready: false`, so consumers use their own fallback.
+- New attribute `changed_since` per component on the 24 h forecast sensor.
+
 ## 0.1.2
 
 - Model settings form now shows the current values: history window as a

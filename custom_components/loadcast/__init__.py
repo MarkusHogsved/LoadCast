@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from homeassistant.const import Platform
 from homeassistant.core import (
@@ -18,14 +18,21 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
 from .const import (
+    ATTR_COMPONENT,
     ATTR_COMPONENTS,
     ATTR_CONFIG_ENTRY_ID,
     ATTR_END,
     ATTR_PERCENTILE,
+    ATTR_SINCE,
     ATTR_START,
+    BASE_COMPONENT,
+    CONF_CHANGE_MARKERS,
     CONF_LOAD_MODE,
+    CONF_SUBLOAD_NAME,
+    CONF_SUBLOADS,
     DOMAIN,
     SERVICE_GET_FORECAST,
+    SERVICE_MARK_CHANGE,
 )
 from .coordinator import LoadCastConfigEntry, LoadCastCoordinator
 
@@ -44,18 +51,29 @@ GET_FORECAST_SCHEMA = vol.Schema(
     }
 )
 
+MARK_CHANGE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_COMPONENT): cv.string,
+        vol.Optional(ATTR_SINCE): cv.datetime,
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+    }
+)
+
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the get_forecast service."""
+    """Register the get_forecast and mark_change services."""
 
-    async def _get_forecast(call: ServiceCall) -> ServiceResponse:
+    def _entry(call: ServiceCall) -> LoadCastConfigEntry:
         entries = hass.config_entries.async_loaded_entries(DOMAIN)
         entry_id = call.data.get(ATTR_CONFIG_ENTRY_ID)
         if entry_id:
             entries = [e for e in entries if e.entry_id == entry_id]
         if not entries:
             raise ServiceValidationError("No loaded LoadCast entry found")
-        coordinator: LoadCastCoordinator = entries[0].runtime_data
+        return entries[0]
+
+    async def _get_forecast(call: ServiceCall) -> ServiceResponse:
+        coordinator: LoadCastCoordinator = _entry(call).runtime_data
 
         start = _as_local(call.data.get(ATTR_START)) or dt_util.now()
         end = _as_local(call.data[ATTR_END])
@@ -77,6 +95,37 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         _get_forecast,
         schema=GET_FORECAST_SCHEMA,
         supports_response=SupportsResponse.ONLY,
+    )
+
+    async def _mark_change(call: ServiceCall) -> None:
+        """Forget a component's history before a known change.
+
+        The component relearns from the new level only. It is not ready until
+        it has a day of new data, so the total forecast reports ready=false in
+        the meantime and consumers fall back to their own estimate.
+        """
+        entry = _entry(call)
+        component = call.data[ATTR_COMPONENT]
+        names = [BASE_COMPONENT] + [
+            s[CONF_SUBLOAD_NAME] for s in entry.options.get(CONF_SUBLOADS, [])
+        ]
+        if component not in names:
+            raise ServiceValidationError(
+                f"Unknown component '{component}'. Choose one of: {', '.join(names)}"
+            )
+        now = dt_util.now()
+        since = _as_local(call.data.get(ATTR_SINCE)) or now
+        if since > now + timedelta(minutes=5):
+            raise ServiceValidationError("'since' must not be in the future")
+        markers = dict(entry.options.get(CONF_CHANGE_MARKERS) or {})
+        markers[component] = dt_util.as_utc(since).isoformat()
+        # The options update listener reloads the entry, which refits.
+        hass.config_entries.async_update_entry(
+            entry, options={**entry.options, CONF_CHANGE_MARKERS: markers}
+        )
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_MARK_CHANGE, _mark_change, schema=MARK_CHANGE_SCHEMA
     )
     return True
 

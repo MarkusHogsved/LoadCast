@@ -135,7 +135,7 @@ Gotchas found so far:
   CHANGELOG section) when the manifest version changes on `main`.
 - Pushing tags directly from the earlier automation environment was
   blocked (403), which is why releases go through the workflow.
-- Released: 0.1.0, 0.1.1, 0.1.2.
+- Released: 0.1.0, 0.1.1, 0.1.2. 0.1.3 adds `loadcast.mark_change`.
 - Commits have been authored as `Markus Hogsved <markus.hogsved@gmail.com>`.
 
 ## Open items / ideas
@@ -145,8 +145,12 @@ Gotchas found so far:
   currently handled outside LoadCast in the automations.
 - Minimum history before publishing (proposal: 3 days, `ready: false` plus
   a repair issue).
-- Possibly `loadcast.reset_learning` for known changes, if the adaptive
-  memory proves too slow.
+- Done in 0.1.3: `loadcast.mark_change` (component, optional `since`) for
+  known changes. Markers live in the entry options (`change_markers`);
+  history before a marker is dropped for that component, which is then not
+  ready (and neither is the total) until it has 24 hourly samples. Markus'
+  HA side calls it from `loadcast_varmepump_andring.yaml` when the heat pump
+  starts while LoadCast still forecasts it as off.
 - v2 ideas only if accuracy data asks for it: quarter-hour statistics,
   holiday calendar, gradient boosting behind the same interface.
 - Keep it small: no cloud, no heavy ML dependencies, works on Container/Core/OS.
