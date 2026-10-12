@@ -43,6 +43,10 @@ CONF_SUBLOAD_SENSOR = "sensor"
 CONF_SUBLOAD_INCLUDE = "include_in_total"
 CONF_WINDOW_DAYS = "window_days"
 CONF_HORIZON_HOURS = "horizon_hours"
+# {component name: ISO timestamp} – history before it is ignored for that
+# component (set by the mark_change service after a known change, such as a
+# repaired heat pump).
+CONF_CHANGE_MARKERS = "change_markers"
 
 DEFAULT_WINDOW_DAYS = 28
 DEFAULT_HORIZON_HOURS = 48
@@ -57,3 +61,7 @@ ATTR_END = "end"
 ATTR_PERCENTILE = "percentile"
 ATTR_COMPONENTS = "components"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
+
+SERVICE_MARK_CHANGE = "mark_change"
+ATTR_COMPONENT = "component"
+ATTR_SINCE = "since"

@@ -12,6 +12,7 @@ from homeassistant.components.recorder.models import StatisticMeanType
 from homeassistant.components.recorder.statistics import async_import_statistics
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.components.recorder.common import (
@@ -202,3 +203,69 @@ async def test_placeholder_entry_fails_with_clear_error(
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     assert entry.state is ConfigEntryState.SETUP_ERROR
+
+
+async def test_mark_change_relearns_from_new_level(
+    hass: HomeAssistant, setup_entry
+) -> None:
+    """A marked component forgets its history before the change."""
+    since = NOW - timedelta(days=3)
+    await hass.services.async_call(
+        DOMAIN,
+        "mark_change",
+        {"component": "heatpump", "since": since.isoformat()},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert setup_entry.state is ConfigEntryState.LOADED
+    assert setup_entry.options["change_markers"]["heatpump"] == (
+        since.astimezone(ZoneInfo("UTC")).isoformat()
+    )
+
+    attrs = hass.states.get("sensor.loadcast_forecast_next_24_h").attributes
+    comps = attrs["components"]
+    # Three days of hourly data remain for the heat pump, the rest is gone.
+    assert 60 <= comps["heatpump"]["samples"] <= 72
+    assert comps["heatpump"]["changed_since"] is not None
+    assert comps["base"]["changed_since"] is None
+    assert comps["base"]["samples"] > 24 * 20
+    assert attrs["ready"] is True
+    # Sub-loads in the options are untouched.
+    assert len(setup_entry.options["subloads"]) == 2
+
+
+async def test_mark_change_not_ready_until_a_day_of_new_data(
+    hass: HomeAssistant, setup_entry
+) -> None:
+    """Right after a change the forecast is not ready, so consumers fall back."""
+    await hass.services.async_call(
+        DOMAIN, "mark_change", {"component": "heatpump"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.loadcast_forecast_next_24_h")
+    assert state.state == "unavailable"
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "get_forecast",
+        {"end": (NOW + timedelta(hours=4)).isoformat()},
+        blocking=True,
+        return_response=True,
+    )
+    assert resp["ready"] is False
+
+
+async def test_mark_change_rejects_unknown_component_and_future(
+    hass: HomeAssistant, setup_entry
+) -> None:
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "mark_change", {"component": "pool"}, blocking=True
+        )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "mark_change",
+            {"component": "heatpump", "since": (NOW + timedelta(days=1)).isoformat()},
+            blocking=True,
+        )
+    assert "change_markers" not in setup_entry.options

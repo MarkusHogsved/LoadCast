@@ -131,6 +131,24 @@
           "description": "If you have several."
         }
       }
+    },
+    "mark_change": {
+      "name": "Mark a change",
+      "description": "A component's consumption changed for a known reason (a heat pump repaired or replaced, a new appliance). LoadCast forgets that component's history before the change and relearns from the new level. Until it has a day of new data the forecast reports ready=false.",
+      "fields": {
+        "component": {
+          "name": "Component",
+          "description": "'base' or the name of a sub-load, e.g. Heat pump."
+        },
+        "since": {
+          "name": "Since",
+          "description": "When the change happened. Default: now."
+        },
+        "config_entry_id": {
+          "name": "LoadCast entry",
+          "description": "If you have several."
+        }
+      }
     }
   }
 }

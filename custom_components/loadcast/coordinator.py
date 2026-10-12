@@ -19,6 +19,7 @@ from .const import (
     BASE_COMPONENT,
     COMPUTED_KEYS,
     COMPUTED_SIGNS,
+    CONF_CHANGE_MARKERS,
     CONF_HORIZON_HOURS,
     CONF_LOAD_MODE,
     CONF_SUBLOAD_INCLUDE,
@@ -69,6 +70,7 @@ class ComponentInfo:
     uses_temperature: bool
     slope_kwh_per_c: float
     samples: int
+    changed_since: datetime | None = None
 
 
 @dataclass
@@ -123,6 +125,16 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
     @property
     def horizon_hours(self) -> int:
         return int(self._conf.get(CONF_HORIZON_HOURS, DEFAULT_HORIZON_HOURS))
+
+    @property
+    def change_markers(self) -> dict[str, datetime]:
+        """Per-component change markers (UTC); history before them is ignored."""
+        out: dict[str, datetime] = {}
+        for name, value in (self._conf.get(CONF_CHANGE_MARKERS) or {}).items():
+            parsed = dt_util.parse_datetime(str(value))
+            if parsed is not None:
+                out[name] = dt_util.as_utc(parsed)
+        return out
 
     def _total_ids(self) -> list[str]:
         conf = self._conf
@@ -230,6 +242,14 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
                 sub_sum += v
                 series[name].append(Sample(t, v, temp))
             series[BASE_COMPONENT].append(Sample(t, max(total[t] - sub_sum, 0.0), temp))
+
+        # A marked component forgets everything before its change: the model
+        # starts over on the new level instead of averaging it with the old
+        # one. Until it has a day of new data it is not ready, and neither is
+        # the total – consumers then use their own fallback.
+        for name, since in self.change_markers.items():
+            if name in series:
+                series[name] = [s for s in series[name] if s.start >= since]
         return series
 
     async def _async_forecast_temperatures(
@@ -307,6 +327,7 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
                 uses_temperature=m.uses_temperature,
                 slope_kwh_per_c=m.slope_kwh_per_c,
                 samples=len(self._series.get(n, [])),
+                changed_since=self.change_markers.get(n),
             )
             for n, m in self._models.items()
         }

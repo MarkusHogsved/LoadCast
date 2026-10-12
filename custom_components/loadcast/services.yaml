@@ -30,3 +30,21 @@ get_forecast:
       selector:
         config_entry:
           integration: loadcast
+
+mark_change:
+  fields:
+    component:
+      required: true
+      example: "Värmepump"
+      selector:
+        text:
+    since:
+      required: false
+      example: "2026-10-13 11:00:00"
+      selector:
+        datetime:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: loadcast
