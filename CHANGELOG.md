@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- README logo now loads in the HACS documentation view: absolute PNG URL
+  instead of a relative SVG path (HACS has no base URL for relative images).
+
 ## 0.1.4
 
 - After `loadcast.mark_change` the forecast no longer becomes unavailable for
