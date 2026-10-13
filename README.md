@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/icon.svg" width="128" alt="LoadCast"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/MarkusHogsved/LoadCast/main/assets/icon.png" width="128" alt="LoadCast"></p>
 
 # LoadCast
 
