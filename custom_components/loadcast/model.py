@@ -261,6 +261,10 @@ class AdaptiveComponentModel:
     errors: dict[tuple[float, bool], float] = field(default_factory=dict)
     _model: ComponentModel | None = field(default=None, repr=False)
 
+    # A fully fitted model is not in transition after a known change.
+    uncertain = False
+    new_samples: int | None = None
+
     @property
     def ready(self) -> bool:
         return self._model is not None and self._model.ready
@@ -353,6 +357,90 @@ class AdaptiveComponentModel:
         if self._model is None:
             return Prediction(0.0, 0.0, 0.0)
         return self._model.predict(start, temp_c)
+
+
+@dataclass
+class TransitionModel:
+    """Forecast for a component during the first day after a known change.
+
+    Until a marked component has a day of new data (``MIN_SAMPLES`` hours) its
+    own model is not ready. Publishing nothing would hide the whole household
+    forecast, so instead:
+
+    * the **shape** (hour of day, weekday/weekend, temperature) comes from a
+      model fitted on the history *before* the change, as of the change;
+    * the **level** is moved by the mean residual of the new hours against
+      that model (a heat pump that starts adds its new draw at once; a false
+      marker leaves the forecast almost unchanged);
+    * P10/P90 are widened by the residual spread plus the size of the shift,
+      so the band covers both the old and the new level.
+
+    With no history before the change the new hours' mean is used as a flat
+    level. The forecast is flagged ``uncertain``.
+    """
+
+    tz: tzinfo
+    window_days: int = DEFAULT_WINDOW_DAYS
+    base: AdaptiveComponentModel | None = field(default=None, repr=False)
+    shift_kwh: float = 0.0
+    extra_kwh: float = 0.0
+    new_samples: int = 0
+    _flat: tuple[float, float, float] | None = field(default=None, repr=False)
+
+    uncertain = True
+
+    def fit(self, samples: list[Sample], since: datetime, now: datetime) -> None:
+        old = [s for s in samples if s.start < since]
+        new = [s for s in samples if since <= s.start <= now]
+        self.new_samples = len(new)
+        base = AdaptiveComponentModel(tz=self.tz, window_days=self.window_days)
+        base.fit(old, now=since)
+        self.base = base if base.ready else None
+        if self.base is not None:
+            residuals = [s.kwh - self.base.predict(s.start, s.temp_c).kwh for s in new]
+            if residuals:
+                self.shift_kwh = sum(residuals) / len(residuals)
+                spread = math.sqrt(
+                    sum((r - self.shift_kwh) ** 2 for r in residuals) / len(residuals)
+                )
+                self.extra_kwh = spread + abs(self.shift_kwh)
+        elif new:
+            values = [s.kwh for s in new]
+            self._flat = (sum(values) / len(values), min(values), max(values))
+
+    @property
+    def ready(self) -> bool:
+        return self.base is not None or self._flat is not None
+
+    @property
+    def half_life_days(self) -> float:
+        return self.base.half_life_days if self.base else DEFAULT_HALF_LIFE_DAYS
+
+    @property
+    def uses_temperature(self) -> bool:
+        return self.base.uses_temperature if self.base else False
+
+    @property
+    def slope_kwh_per_c(self) -> float:
+        return self.base.slope_kwh_per_c if self.base else 0.0
+
+    @property
+    def fitted_at(self) -> datetime | None:
+        return self.base.fitted_at if self.base else None
+
+    def predict(self, start: datetime, temp_c: float | None = None) -> Prediction:
+        if self.base is not None:
+            p = self.base.predict(start, temp_c)
+            kwh = max(p.kwh + self.shift_kwh, 0.0)
+            return Prediction(
+                kwh=kwh,
+                p10=max(min(p.p10 + self.shift_kwh, kwh) - self.extra_kwh, 0.0),
+                p90=max(p.p90 + self.shift_kwh, kwh) + self.extra_kwh,
+            )
+        if self._flat is not None:
+            mean, lo, hi = self._flat
+            return Prediction(kwh=mean, p10=lo, p90=hi)
+        return Prediction(0.0, 0.0, 0.0)
 
 
 def _weighted_quantile(values: list[tuple[float, float]], q: float) -> float:

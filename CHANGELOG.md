@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.4
+
+- After `loadcast.mark_change` the forecast no longer becomes unavailable for
+  a day. Until the component has 24 hours of new data it is forecast from its
+  old profile moved to the level of the hours since the change, with a wider
+  P10/P90 band. The sensors stay available and `ready: true`.
+- New attributes `uncertain` and `uncertain_components` on the 24 h forecast
+  sensor, `uncertain` and `new_samples` per component, and `uncertain` in the
+  `loadcast.get_forecast` response.
+
 ## 0.1.3
 
 - New service `loadcast.mark_change` (component, optional `since`): forget a

@@ -134,7 +134,7 @@
     },
     "mark_change": {
       "name": "Mark a change",
-      "description": "A component's consumption changed for a known reason (a heat pump repaired or replaced, a new appliance). LoadCast forgets that component's history before the change and relearns from the new level. Until it has a day of new data the forecast reports ready=false.",
+      "description": "A component's consumption changed for a known reason (a heat pump repaired or replaced, a new appliance). LoadCast forgets that component's history before the change and relearns from the new level. Until it has a day of new data the component is forecast from its old profile moved to the new level, and the forecast is flagged uncertain.",
       "fields": {
         "component": {
           "name": "Component",
