@@ -72,6 +72,8 @@ def _forecast_attrs(c: LoadCastCoordinator) -> dict[str, Any]:
                 "changed_since": info.changed_since.isoformat()
                 if info.changed_since
                 else None,
+                "uncertain": info.uncertain,
+                "new_samples": info.new_samples,
                 "forecast_24h_kwh": round(
                     sum(
                         h.components[name].kwh
@@ -84,6 +86,8 @@ def _forecast_attrs(c: LoadCastCoordinator) -> dict[str, Any]:
             for name, info in data.components.items()
         },
         "ready": data.ready,
+        "uncertain": bool(data.uncertain_components),
+        "uncertain_components": data.uncertain_components,
         "fitted_at": data.fitted_at.isoformat() if data.fitted_at else None,
     }
 

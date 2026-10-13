@@ -134,7 +134,7 @@
     },
     "mark_change": {
       "name": "Markera en förändring",
-      "description": "En komponents förbrukning har ändrats av en känd orsak (värmepumpen lagad eller utbytt, en ny apparat). LoadCast glömmer komponentens historik före förändringen och lär om från den nya nivån. Tills det finns ett dygn ny data rapporterar prognosen ready=false.",
+      "description": "En komponents förbrukning har ändrats av en känd orsak (värmepumpen lagad eller utbytt, en ny apparat). LoadCast glömmer komponentens historik före förändringen och lär om från den nya nivån. Tills det finns ett dygn ny data prognostiseras komponenten från sin gamla profil flyttad till den nya nivån, och prognosen flaggas som osäker (uncertain).",
       "fields": {
         "component": {
           "name": "Komponent",

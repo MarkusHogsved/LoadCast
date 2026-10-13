@@ -12,6 +12,7 @@ from custom_components.loadcast.model import (
     AdaptiveComponentModel,
     ComponentModel,
     Sample,
+    TransitionModel,
 )
 
 from . import backtest
@@ -178,3 +179,71 @@ def test_adaptive_keeps_real_heating_slope():
     m.fit(samples, now=START + timedelta(days=21))
     assert m.uses_temperature is True
     assert m.slope_kwh_per_c < -0.05
+
+
+# --- Transition after a known change (mark_change) -------------------------------
+
+
+def _pump(kwh_before: float, kwh_after: float, change: datetime, new_hours: int):
+    """14 days at one level, then ``new_hours`` hours at another."""
+    before = [Sample(t, kwh_before, 10.0) for t in hours(14) if t < change]
+    after = [
+        Sample(change + timedelta(hours=i), kwh_after, 10.0) for i in range(new_hours)
+    ]
+    return before + after
+
+
+CHANGE = (START + timedelta(days=14)).astimezone(ZoneInfo("UTC"))
+
+
+def test_transition_false_marker_keeps_forecast():
+    """A marker with no real change (12/10: a battery on the same circuit)
+    leaves the forecast where it was, flagged uncertain."""
+    samples = _pump(0.15, 0.15, CHANGE, 6)
+    now = CHANGE + timedelta(hours=6)
+    t = TransitionModel(tz=TZ)
+    t.fit(samples, since=CHANGE, now=now)
+    full = AdaptiveComponentModel(tz=TZ)
+    full.fit(samples, now=now)
+    assert t.ready and t.uncertain and t.new_samples == 6
+    assert abs(t.shift_kwh) < 0.02
+    day = START + timedelta(days=15)
+    assert day_total(t, day, 10.0) == pytest.approx(day_total(full, day, 10.0), abs=0.5)
+
+
+def test_transition_pump_start_moves_level_at_once():
+    """A heat pump that starts shows up after its first hours, with a band
+    that covers both the old and the new level."""
+    samples = _pump(0.1, 1.5, CHANGE, 3)
+    t = TransitionModel(tz=TZ)
+    t.fit(samples, since=CHANGE, now=CHANGE + timedelta(hours=3))
+    p = t.predict(CHANGE + timedelta(hours=10), 10.0)
+    assert p.kwh == pytest.approx(1.5, abs=0.1)
+    assert p.p10 <= 0.2  # old level still inside the band
+    assert p.p90 >= 1.5
+    assert p.p10 <= p.kwh <= p.p90
+
+
+def test_transition_without_new_hours_is_the_old_model():
+    samples = _pump(0.4, 0.4, CHANGE, 0)
+    t = TransitionModel(tz=TZ)
+    t.fit(samples, since=CHANGE, now=CHANGE)
+    base = AdaptiveComponentModel(tz=TZ)
+    base.fit(samples, now=CHANGE)
+    assert t.ready and t.new_samples == 0 and t.shift_kwh == 0
+    when = CHANGE + timedelta(hours=5)
+    assert t.predict(when, 10.0) == base.predict(when, 10.0)
+
+
+def test_transition_without_old_history_uses_new_mean():
+    """A brand-new load: the hours seen so far as a flat level."""
+    new = [
+        Sample(CHANGE + timedelta(hours=i), v) for i, v in enumerate([1.0, 2.0, 3.0])
+    ]
+    t = TransitionModel(tz=TZ)
+    t.fit(new, since=CHANGE, now=CHANGE + timedelta(hours=3))
+    p = t.predict(CHANGE + timedelta(hours=8))
+    assert t.ready and p.kwh == pytest.approx(2.0) and p.p10 == 1.0 and p.p90 == 3.0
+    empty = TransitionModel(tz=TZ)
+    empty.fit([], since=CHANGE, now=CHANGE)
+    assert not empty.ready

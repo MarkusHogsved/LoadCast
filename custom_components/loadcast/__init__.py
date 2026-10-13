@@ -87,6 +87,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             "end": end.isoformat(),
             "percentile": call.data[ATTR_PERCENTILE],
             "ready": bool(coordinator.data and coordinator.data.ready),
+            "uncertain": bool(
+                coordinator.data and coordinator.data.uncertain_components
+            ),
         }
 
     hass.services.async_register(
@@ -100,9 +103,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def _mark_change(call: ServiceCall) -> None:
         """Forget a component's history before a known change.
 
-        The component relearns from the new level only. It is not ready until
-        it has a day of new data, so the total forecast reports ready=false in
-        the meantime and consumers fall back to their own estimate.
+        The component relearns from the new level only. Until it has a day of
+        new data it is forecast from its old shape moved to the level of the
+        new hours, with a wider P10/P90 band, and the forecast is flagged
+        ``uncertain`` (it stays available and ``ready``).
         """
         entry = _entry(call)
         component = call.data[ATTR_COMPONENT]

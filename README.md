@@ -125,9 +125,16 @@ appliance was installed – tell LoadCast, and that component starts over:
 ```
 
 History before `since` is ignored for that component. Until it has 24 hours
-of new data the forecast reports `ready: false` (the sensors become
-unavailable), so a consumer that checks `ready` falls back to its own
-estimate instead of using a half-learned one. The marker is shown as
+of new data it is forecast in transition: the profile it had before the
+change (hour of day, weekday/weekend, temperature), moved to the average
+level of the hours measured since the change, with a P10/P90 band widened to
+cover both levels. The forecast stays available and `ready: true`, but is
+flagged `uncertain: true` with the component listed in
+`uncertain_components` (per component: `uncertain`, `new_samples`). A
+consumer that prefers its own estimate during a change can check
+`uncertain`; one that cares about running short can use P90. A false marker
+therefore barely moves the forecast, and a heat pump that starts shows up as
+soon as its first hour is recorded. The marker is shown as
 `changed_since` in the `components` attribute. The 7-day accuracy replay
 skips days before the marker.
 

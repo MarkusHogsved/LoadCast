@@ -146,6 +146,8 @@ async def test_sensors_from_real_statistics(hass: HomeAssistant, setup_entry) ->
 
     attrs = state.attributes
     assert attrs["ready"] is True
+    assert attrs["uncertain"] is False
+    assert attrs["uncertain_components"] == []
     assert len(attrs["forecast"]) == 48
     first = attrs["forecast"][0]
     assert first["kwh_p10"] <= first["kwh"] <= first["kwh_p90"]
@@ -230,20 +232,36 @@ async def test_mark_change_relearns_from_new_level(
     assert comps["base"]["changed_since"] is None
     assert comps["base"]["samples"] > 24 * 20
     assert attrs["ready"] is True
+    # Three days of new data: relearned for real, no longer uncertain.
+    assert attrs["uncertain"] is False
+    assert comps["heatpump"]["uncertain"] is False
+    assert comps["heatpump"]["new_samples"] == comps["heatpump"]["samples"]
     # Sub-loads in the options are untouched.
     assert len(setup_entry.options["subloads"]) == 2
 
 
-async def test_mark_change_not_ready_until_a_day_of_new_data(
+async def test_mark_change_stays_available_but_uncertain(
     hass: HomeAssistant, setup_entry
 ) -> None:
-    """Right after a change the forecast is not ready, so consumers fall back."""
+    """Right after a change the forecast stays available, flagged uncertain,
+    and a marker without a real change barely moves it."""
+    before = float(hass.states.get("sensor.loadcast_forecast_next_24_h").state)
     await hass.services.async_call(
         DOMAIN, "mark_change", {"component": "heatpump"}, blocking=True
     )
     await hass.async_block_till_done()
     state = hass.states.get("sensor.loadcast_forecast_next_24_h")
-    assert state.state == "unavailable"
+    assert state.state != "unavailable"
+    attrs = state.attributes
+    assert attrs["ready"] is True
+    assert attrs["uncertain"] is True
+    assert attrs["uncertain_components"] == ["heatpump"]
+    assert attrs["components"]["heatpump"]["uncertain"] is True
+    assert attrs["components"]["heatpump"]["new_samples"] == 0
+    assert attrs["components"]["base"]["uncertain"] is False
+    assert float(state.state) == pytest.approx(before, rel=0.1)
+    first = attrs["forecast"][0]
+    assert first["kwh_p10"] <= first["kwh"] <= first["kwh_p90"]
     resp = await hass.services.async_call(
         DOMAIN,
         "get_forecast",
@@ -251,7 +269,8 @@ async def test_mark_change_not_ready_until_a_day_of_new_data(
         blocking=True,
         return_response=True,
     )
-    assert resp["ready"] is False
+    assert resp["ready"] is True
+    assert resp["uncertain"] is True
 
 
 async def test_mark_change_rejects_unknown_component_and_future(

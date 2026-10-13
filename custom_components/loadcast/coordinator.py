@@ -36,7 +36,7 @@ from .const import (
     LOAD_MODE_COMPUTED,
     UPDATE_INTERVAL,
 )
-from .model import AdaptiveComponentModel, Prediction, Sample
+from .model import AdaptiveComponentModel, Prediction, Sample, TransitionModel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -71,6 +71,8 @@ class ComponentInfo:
     slope_kwh_per_c: float
     samples: int
     changed_since: datetime | None = None
+    uncertain: bool = False
+    new_samples: int | None = None
 
 
 @dataclass
@@ -81,6 +83,7 @@ class LoadCastData:
     components: dict[str, ComponentInfo]
     fitted_at: datetime | None
     ready: bool
+    uncertain_components: list[str] = field(default_factory=list)
     accuracy_yesterday_pct: float | None = None
     bias_7d_kwh: float | None = None
     error_days: list[dict[str, Any]] = field(default_factory=list)
@@ -99,7 +102,7 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
             name=DOMAIN,
             update_interval=UPDATE_INTERVAL,
         )
-        self._models: dict[str, AdaptiveComponentModel] = {}
+        self._models: dict[str, AdaptiveComponentModel | TransitionModel] = {}
         self._series: dict[str, list[Sample]] = {}
         self._last_fit_hour: datetime | None = None
         self._accuracy: tuple[float | None, float | None, list[dict[str, Any]]] = (
@@ -157,14 +160,34 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
 
     async def _async_refit(self, now: datetime) -> None:
         """Load statistics and fit one model per component."""
-        self._series = await self._async_load_series(now)
+        full = await self._async_load_series(now)
+        markers = self.change_markers
+        # A marked component forgets everything before its change: the model
+        # starts over on the new level instead of averaging it with the old
+        # one. Until it has a day of new data it is forecast by a
+        # TransitionModel (old shape, new level, wider band, flagged
+        # uncertain) so the household forecast stays available.
+        self._series = {
+            name: [s for s in samples if s.start >= markers[name]]
+            if name in markers
+            else samples
+            for name, samples in full.items()
+        }
         tz = dt_util.get_default_time_zone()
 
-        def _fit() -> tuple[dict[str, AdaptiveComponentModel], tuple]:
-            models: dict[str, AdaptiveComponentModel] = {}
+        def _fit() -> tuple[dict[str, AdaptiveComponentModel | TransitionModel], tuple]:
+            models: dict[str, AdaptiveComponentModel | TransitionModel] = {}
             for name, samples in self._series.items():
                 m = AdaptiveComponentModel(tz=tz, window_days=self.window_days)
                 m.fit(samples, now=now)
+                if not m.ready and name in markers:
+                    t = TransitionModel(tz=tz, window_days=self.window_days)
+                    t.fit(full[name], since=markers[name], now=now)
+                    if t.ready:
+                        models[name] = t
+                        continue
+                if name in markers:
+                    m.new_samples = len(samples)
                 models[name] = m
             return models, self._compute_accuracy(now, tz)
 
@@ -242,14 +265,6 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
                 sub_sum += v
                 series[name].append(Sample(t, v, temp))
             series[BASE_COMPONENT].append(Sample(t, max(total[t] - sub_sum, 0.0), temp))
-
-        # A marked component forgets everything before its change: the model
-        # starts over on the new level instead of averaging it with the old
-        # one. Until it has a day of new data it is not ready, and neither is
-        # the total – consumers then use their own fallback.
-        for name, since in self.change_markers.items():
-            if name in series:
-                series[name] = [s for s in series[name] if s.start >= since]
         return series
 
     async def _async_forecast_temperatures(
@@ -328,6 +343,8 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
                 slope_kwh_per_c=m.slope_kwh_per_c,
                 samples=len(self._series.get(n, [])),
                 changed_since=self.change_markers.get(n),
+                uncertain=m.uncertain,
+                new_samples=m.new_samples,
             )
             for n, m in self._models.items()
         }
@@ -339,6 +356,11 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
             if BASE_COMPONENT in self._models
             else None,
             ready=bool(self._models) and all(m.ready for m in self._models.values()),
+            uncertain_components=[
+                n
+                for n, m in self._models.items()
+                if m.uncertain and included.get(n, True)
+            ],
             accuracy_yesterday_pct=acc,
             bias_7d_kwh=bias,
             error_days=days,
