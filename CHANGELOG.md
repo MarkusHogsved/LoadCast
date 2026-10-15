@@ -2,12 +2,13 @@
 
 ## 0.1.6
 
-- Sub-load meters that report late are realigned. Each sub-load's lag
-  (0-2 h) is detected from its correlation with the total load and its
-  readings are moved back to when the load ran. The Zaptec charger's meter
-  counts about an hour late: in the author's house the base load got a false
-  peak in every charging hour and negative hours after it (correlation with
-  the total 0.45 at lag 0, 0.90 at lag 1). Shown per component as
+- Sub-load meters that report late are realigned. A sub-load is part of the
+  total, so a meter in step never shows more than the total; a late meter
+  does, in the hour after the load. When a meter exceeds the total by at
+  least 2 % of its energy and a lag of 1-2 h removes at least 75 % of that,
+  its readings are moved back to when the load ran. The Zaptec charger in the
+  author's house exceeds the total by 102 kWh at lag 0 and 0.8 kWh at lag 1
+  (31 days); the heat-pump meter never does. Shown per component as
   `meter_lag_hours`.
 - Base load no longer invents energy. Hours where the sub-loads exceed the
   total used to be clipped at 0, which kept the false peak (110 kWh in 31

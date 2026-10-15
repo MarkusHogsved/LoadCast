@@ -42,47 +42,44 @@ SLOPE_SHRINK_C2 = 1.0  # shrink slope by var / (var + this), in °C²
 MIN_SAMPLES = 24  # fewer usable samples than this → model not ready
 MAX_SHIFT_HOURS = 3  # how far a negative base-load hour may borrow energy
 MAX_METER_LAG_HOURS = 2  # sub-load meters reporting up to this late are realigned
-METER_LAG_MIN_GAIN = 0.1  # correlation gain needed before a lag is applied
+METER_LAG_MIN_EVIDENCE = (
+    0.02  # meter must exceed the total by 2 % of its energy at lag 0
+)
+METER_LAG_MAX_REMAINING = 0.25  # ... and the chosen lag must remove 75 % of that
 
 
-def _correlation(a: list[float], b: list[float]) -> float:
-    n = len(a)
-    if n < 3:
-        return 0.0
-    ma, mb = sum(a) / n, sum(b) / n
-    va = sum((x - ma) ** 2 for x in a)
-    vb = sum((y - mb) ** 2 for y in b)
-    if va <= 0 or vb <= 0:
-        return 0.0
-    return sum((x - ma) * (y - mb) for x, y in zip(a, b, strict=False)) / math.sqrt(
-        va * vb
-    )
+def _overshoot(
+    total: dict[datetime, float], sub: dict[datetime, float], lag: int
+) -> float:
+    """Energy the sub-load meter shows above the total load, with the meter
+    read ``lag`` hours later. A meter in step with the load can never show
+    more than the total it is part of."""
+    d = timedelta(hours=lag)
+    return sum(max(sub[t + d] - v, 0.0) for t, v in total.items() if t + d in sub)
 
 
 def detect_meter_lag(total: dict[datetime, float], sub: dict[datetime, float]) -> int:
     """How many hours a sub-load meter reports after the total load sees it.
 
-    The Zaptec charger's energy meter counts a charging hour about one hour
-    late (real data 2026-09-14 – 10-14: correlation with the inverter's load
-    0.45 at lag 0, 0.90 at lag 1). The lag with the highest correlation
-    between the shifted meter and the total wins, but only if it beats lag 0
-    by ``METER_LAG_MIN_GAIN`` - a meter that barely varies keeps lag 0.
+    The evidence is physical: a sub-load is part of the total, so a meter in
+    step never exceeds it. A late meter does, in the hour after the load ran.
+    The Zaptec charger in the author's house (2026-09-14 – 10-14) exceeds the
+    total by 102 kWh at lag 0 and 0.8 kWh at lag 1; the heat-pump meter never
+    exceeds it. A lag is only applied when the meter exceeds the total by at
+    least ``METER_LAG_MIN_EVIDENCE`` of its energy at lag 0 and the best lag
+    removes at least 75 % of that. Correlation alone is not used: an
+    unrelated larger load an hour earlier would make a correct meter look late.
     """
-    best_lag, best_c, c0 = 0, None, None
-    for lag in range(MAX_METER_LAG_HOURS + 1):
-        pairs = [
-            (total[t], sub[t + timedelta(hours=lag)])
-            for t in total
-            if t + timedelta(hours=lag) in sub
-        ]
-        c = _correlation([p[0] for p in pairs], [p[1] for p in pairs])
-        if lag == 0:
-            c0 = c
-        if best_c is None or c > best_c:
-            best_lag, best_c = lag, c
-    if best_lag and best_c - c0 < METER_LAG_MIN_GAIN:
+    energy = sum(max(v, 0.0) for v in sub.values())
+    if energy <= 0:
         return 0
-    return best_lag
+    over = [_overshoot(total, sub, lag) for lag in range(MAX_METER_LAG_HOURS + 1)]
+    if over[0] < METER_LAG_MIN_EVIDENCE * energy:
+        return 0
+    best = min(range(len(over)), key=lambda lag: (over[lag], lag))
+    if best and over[best] <= METER_LAG_MAX_REMAINING * over[0]:
+        return best
+    return 0
 
 
 def shift_meter(sub: dict[datetime, float], lag: int) -> dict[datetime, float]:

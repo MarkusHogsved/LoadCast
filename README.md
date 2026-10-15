@@ -138,9 +138,10 @@ soon as its first hour is recorded. The marker is shown as
 `changed_since` in the `components` attribute. The 7-day accuracy replay
 skips days before the marker.
 
-Sub-load meters that report late are realigned automatically: LoadCast
-compares each sub-load with the total load at lags of 0-2 hours and moves the
-readings back to the lag that matches best (`meter_lag_hours` per component).
+Sub-load meters that report late are realigned automatically. A sub-load is
+part of the total, so a meter in step never shows more than the total; when
+one does, LoadCast tries lags of 1-2 hours and moves the readings back to the
+lag that removes the excess (`meter_lag_hours` per component).
 An EV charger whose meter counts an hour late would otherwise leave a false
 base-load peak in every charging hour. Hours where the sub-loads still exceed
 the total borrow from neighbouring hours instead of being clipped, so the base

@@ -302,8 +302,19 @@ def test_no_lag_for_a_meter_in_step():
     assert detect_meter_lag(total, dict(zip(h, load, strict=False))) == 0
 
 
+def test_unrelated_earlier_load_does_not_fake_a_lag():
+    """Codex review: a synchronized sub-load at 18:00 with a larger unrelated
+    load at 17:00 correlates best with the total at lag 1. The meter never
+    exceeds the total, so no lag may be applied."""
+    h = _hours(240)
+    sub = {t: (2.0 if t.hour == 18 else 0.0) for t in h}
+    other = {t: (8.0 if t.hour == 17 else 0.5) for t in h}
+    total = {t: sub[t] + other[t] for t in h}
+    assert detect_meter_lag(total, sub) == 0
+
+
 def test_real_zaptec_meter_lags_one_hour():
-    """The fixture: the EV meter correlates 0.45 with the total at lag 0, 0.90 at lag 1."""
+    """The fixture: the EV meter exceeds the total by 102 kWh at lag 0, 0.8 kWh at lag 1."""
     import csv
 
     from .fixtures.loader import HOUSE_CSV

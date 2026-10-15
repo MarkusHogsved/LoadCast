@@ -261,8 +261,8 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
         subs = {
             s[CONF_SUBLOAD_NAME]: hourly(s[CONF_SUBLOAD_SENSOR]) for s in self.subloads
         }
-        # A meter that reports late (Zaptec: ~1 h) is moved back to when the
-        # load actually ran, otherwise the base load gets a false peak in the
+        # A meter that reports late (Zaptec: ~1 h) shows more than the total in
+        # the hour after the load; it is moved back to when the load ran, otherwise the base load gets a false peak in the
         # charging hour and negative hours after it.
         self.meter_lags = {}
         for name in list(subs):
