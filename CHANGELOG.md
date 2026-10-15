@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.6
+
+- Sub-load meters that report late are realigned. Each sub-load's lag
+  (0-2 h) is detected from its correlation with the total load and its
+  readings are moved back to when the load ran. The Zaptec charger's meter
+  counts about an hour late: in the author's house the base load got a false
+  peak in every charging hour and negative hours after it (correlation with
+  the total 0.45 at lag 0, 0.90 at lag 1). Shown per component as
+  `meter_lag_hours`.
+- Base load no longer invents energy. Hours where the sub-loads exceed the
+  total used to be clipped at 0, which kept the false peak (110 kWh in 31
+  days here). A negative hour now borrows from the hours around it, at most
+  3 h away, so the base load's energy matches total − sub-loads.
+- Backtest on 31 days of real data (fixture extended to 2026-10-14):
+  daily MAPE 10.8 → 9.6 %, bias +2.6 → −0.8 kWh/day, hourly MAE
+  0.570 → 0.527 kWh, P10-P90 coverage 84 → 79 %. The backtest now scores
+  both variants against the energy-conserving actual and reports bias,
+  hourly MAE and band coverage.
+- The error sensor gets `bias_days`: how many days `bias_7d_kwh` is based on
+  (fewer than 7 after `loadcast.mark_change`).
+
 ## 0.1.5
 
 - README logo now loads in the HACS documentation view: absolute PNG URL

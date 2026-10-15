@@ -82,7 +82,7 @@ It uses up to 28 days by default.
 | `sensor.loadcast_forecast_next_24_h` | kWh over the next 24 h. Attribute `forecast` holds the hourly forecast (`period_start`, `kwh`, `kwh_p10`, `kwh_p90`); `components` shows each model's memory, temperature slope and 24 h total. |
 | `sensor.loadcast_forecast_rest_of_today` | kWh from now until midnight |
 | `sensor.loadcast_forecast_next_hour` | kWh over the next 60 minutes |
-| `sensor.loadcast_forecast_error_yesterday` | Diagnostic: yesterday's day-ahead error in %, attributes `bias_7d_kwh` and the last 7 days' forecast vs actual |
+| `sensor.loadcast_forecast_error_yesterday` | Diagnostic: yesterday's day-ahead error in %, attributes `bias_7d_kwh`, `bias_days` (days behind the bias) and the last 7 days' forecast vs actual |
 
 ## Using the forecast
 
@@ -137,6 +137,14 @@ therefore barely moves the forecast, and a heat pump that starts shows up as
 soon as its first hour is recorded. The marker is shown as
 `changed_since` in the `components` attribute. The 7-day accuracy replay
 skips days before the marker.
+
+Sub-load meters that report late are realigned automatically: LoadCast
+compares each sub-load with the total load at lags of 0-2 hours and moves the
+readings back to the lag that matches best (`meter_lag_hours` per component).
+An EV charger whose meter counts an hour late would otherwise leave a false
+base-load peak in every charging hour. Hours where the sub-loads still exceed
+the total borrow from neighbouring hours instead of being clipped, so the base
+load never invents energy.
 
 ## Development
 

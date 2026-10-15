@@ -74,6 +74,7 @@ def _forecast_attrs(c: LoadCastCoordinator) -> dict[str, Any]:
                 else None,
                 "uncertain": info.uncertain,
                 "new_samples": info.new_samples,
+                "meter_lag_hours": info.meter_lag_hours,
                 "forecast_24h_kwh": round(
                     sum(
                         h.components[name].kwh
@@ -93,7 +94,11 @@ def _forecast_attrs(c: LoadCastCoordinator) -> dict[str, Any]:
 
 
 def _accuracy_attrs(c: LoadCastCoordinator) -> dict[str, Any]:
-    return {"bias_7d_kwh": c.data.bias_7d_kwh, "days": c.data.error_days}
+    return {
+        "bias_7d_kwh": c.data.bias_7d_kwh,
+        "bias_days": len(c.data.error_days),
+        "days": c.data.error_days,
+    }
 
 
 SENSORS: tuple[LoadCastSensorDescription, ...] = (

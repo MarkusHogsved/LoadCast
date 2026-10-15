@@ -40,6 +40,94 @@ NEIGHBOUR_HOUR_WEIGHT = 0.4  # weight of samples one hour away
 OTHER_DAYTYPE_WEIGHT = 0.3  # weight of weekday samples for a weekend slot etc.
 SLOPE_SHRINK_C2 = 1.0  # shrink slope by var / (var + this), in °C²
 MIN_SAMPLES = 24  # fewer usable samples than this → model not ready
+MAX_SHIFT_HOURS = 3  # how far a negative base-load hour may borrow energy
+MAX_METER_LAG_HOURS = 2  # sub-load meters reporting up to this late are realigned
+METER_LAG_MIN_GAIN = 0.1  # correlation gain needed before a lag is applied
+
+
+def _correlation(a: list[float], b: list[float]) -> float:
+    n = len(a)
+    if n < 3:
+        return 0.0
+    ma, mb = sum(a) / n, sum(b) / n
+    va = sum((x - ma) ** 2 for x in a)
+    vb = sum((y - mb) ** 2 for y in b)
+    if va <= 0 or vb <= 0:
+        return 0.0
+    return sum((x - ma) * (y - mb) for x, y in zip(a, b, strict=False)) / math.sqrt(
+        va * vb
+    )
+
+
+def detect_meter_lag(total: dict[datetime, float], sub: dict[datetime, float]) -> int:
+    """How many hours a sub-load meter reports after the total load sees it.
+
+    The Zaptec charger's energy meter counts a charging hour about one hour
+    late (real data 2026-09-14 – 10-14: correlation with the inverter's load
+    0.45 at lag 0, 0.90 at lag 1). The lag with the highest correlation
+    between the shifted meter and the total wins, but only if it beats lag 0
+    by ``METER_LAG_MIN_GAIN`` - a meter that barely varies keeps lag 0.
+    """
+    best_lag, best_c, c0 = 0, None, None
+    for lag in range(MAX_METER_LAG_HOURS + 1):
+        pairs = [
+            (total[t], sub[t + timedelta(hours=lag)])
+            for t in total
+            if t + timedelta(hours=lag) in sub
+        ]
+        c = _correlation([p[0] for p in pairs], [p[1] for p in pairs])
+        if lag == 0:
+            c0 = c
+        if best_c is None or c > best_c:
+            best_lag, best_c = lag, c
+    if best_lag and best_c - c0 < METER_LAG_MIN_GAIN:
+        return 0
+    return best_lag
+
+
+def shift_meter(sub: dict[datetime, float], lag: int) -> dict[datetime, float]:
+    """Move a late meter's readings ``lag`` hours earlier (to when the load ran)."""
+    if not lag:
+        return dict(sub)
+    d = timedelta(hours=lag)
+    return {t - d: v for t, v in sub.items()}
+
+
+def reconcile_residual(hours: list[datetime], residual: list[float]) -> list[float]:
+    """Base load per hour from ``total − metered sub-loads``, without losing energy.
+
+    A sub-load meter that reports late (a Zaptec charger counts its energy
+    about an hour after the inverter sees the load) makes the residual too
+    high in one hour and negative in the next. Clipping the negative hours at
+    zero keeps the false peak and adds energy that never existed. Instead a
+    negative hour takes the missing energy back from the hours just before it,
+    then from the hours just after, at most ``MAX_SHIFT_HOURS`` away and only
+    across consecutive hours. Whatever cannot be placed is dropped (clipped).
+    """
+    out = list(residual)
+    n = len(out)
+
+    def consecutive(i: int, j: int) -> bool:
+        lo, hi = min(i, j), max(i, j)
+        return hours[hi] - hours[lo] == timedelta(hours=hi - lo)
+
+    for i in range(n):
+        if out[i] >= 0:
+            continue
+        deficit = -out[i]
+        out[i] = 0.0
+        order = [i - k for k in range(1, MAX_SHIFT_HOURS + 1)] + [
+            i + k for k in range(1, MAX_SHIFT_HOURS + 1)
+        ]
+        for j in order:
+            if deficit <= 0:
+                break
+            if j < 0 or j >= n or out[j] <= 0 or not consecutive(i, j):
+                continue
+            take = min(out[j], deficit)
+            out[j] -= take
+            deficit -= take
+    return out
 
 
 @dataclass(frozen=True)

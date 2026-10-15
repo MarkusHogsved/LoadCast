@@ -36,7 +36,15 @@ from .const import (
     LOAD_MODE_COMPUTED,
     UPDATE_INTERVAL,
 )
-from .model import AdaptiveComponentModel, Prediction, Sample, TransitionModel
+from .model import (
+    AdaptiveComponentModel,
+    Prediction,
+    Sample,
+    TransitionModel,
+    detect_meter_lag,
+    reconcile_residual,
+    shift_meter,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,6 +81,7 @@ class ComponentInfo:
     changed_since: datetime | None = None
     uncertain: bool = False
     new_samples: int | None = None
+    meter_lag_hours: int = 0
 
 
 @dataclass
@@ -104,6 +113,7 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
         )
         self._models: dict[str, AdaptiveComponentModel | TransitionModel] = {}
         self._series: dict[str, list[Sample]] = {}
+        self.meter_lags: dict[str, int] = {}
         self._last_fit_hour: datetime | None = None
         self._accuracy: tuple[float | None, float | None, list[dict[str, Any]]] = (
             None,
@@ -251,10 +261,20 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
         subs = {
             s[CONF_SUBLOAD_NAME]: hourly(s[CONF_SUBLOAD_SENSOR]) for s in self.subloads
         }
+        # A meter that reports late (Zaptec: ~1 h) is moved back to when the
+        # load actually ran, otherwise the base load gets a false peak in the
+        # charging hour and negative hours after it.
+        self.meter_lags = {}
+        for name in list(subs):
+            lag = detect_meter_lag(total, subs[name])
+            self.meter_lags[name] = lag
+            subs[name] = shift_meter(subs[name], lag)
 
         series: dict[str, list[Sample]] = {BASE_COMPONENT: []}
         for name in subs:
             series[name] = []
+        hours: list[datetime] = []
+        residual: list[float] = []
         for t in sorted(total):
             if any(t not in sub for sub in subs.values()):
                 continue  # keep components aligned hour by hour
@@ -264,7 +284,12 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
                 v = max(sub[t], 0.0)
                 sub_sum += v
                 series[name].append(Sample(t, v, temp))
-            series[BASE_COMPONENT].append(Sample(t, max(total[t] - sub_sum, 0.0), temp))
+            hours.append(t)
+            residual.append(total[t] - sub_sum)
+        # Base load = what is left; negative hours borrow from their
+        # neighbours instead of being clipped, so no energy is invented.
+        for t, v in zip(hours, reconcile_residual(hours, residual), strict=False):
+            series[BASE_COMPONENT].append(Sample(t, v, temps.get(t)))
         return series
 
     async def _async_forecast_temperatures(
@@ -345,6 +370,7 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
                 changed_since=self.change_markers.get(n),
                 uncertain=m.uncertain,
                 new_samples=m.new_samples,
+                meter_lag_hours=self.meter_lags.get(n, 0),
             )
             for n, m in self._models.items()
         }
