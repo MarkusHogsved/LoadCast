@@ -13,6 +13,9 @@ from custom_components.loadcast.model import (
     ComponentModel,
     Sample,
     TransitionModel,
+    detect_meter_lag,
+    reconcile_residual,
+    shift_meter,
 )
 
 from . import backtest
@@ -247,3 +250,92 @@ def test_transition_without_old_history_uses_new_mean():
     empty = TransitionModel(tz=TZ)
     empty.fit([], since=CHANGE, now=CHANGE)
     assert not empty.ready
+
+
+# --- Sub-load meters that report late (0.1.6) -----------------------------------
+
+UTC = ZoneInfo("UTC")
+
+
+def _hours(n: int) -> list[datetime]:
+    return [
+        datetime(2026, 10, 14, 15, tzinfo=UTC) + timedelta(hours=i) for i in range(n)
+    ]
+
+
+def test_reconcile_conserves_energy_and_removes_negatives():
+    h = _hours(6)
+    out = reconcile_residual(h, [1.0, 12.0, 2.7, -5.4, -1.9, 1.2])
+    assert min(out) >= 0
+    assert math.isclose(sum(out), 1.0 + 12.0 + 2.7 - 5.4 - 1.9 + 1.2)
+    assert out[1] < 12.0  # the false peak gives back energy
+
+
+def test_reconcile_does_not_borrow_across_gaps():
+    h = _hours(3)
+    h[0] = h[0] - timedelta(hours=5)  # a gap before hour 1
+    out = reconcile_residual(h, [5.0, -2.0, 0.0])
+    assert out == [5.0, 0.0, 0.0]
+
+
+def test_reconcile_leaves_clean_series_alone():
+    h = _hours(4)
+    assert reconcile_residual(h, [1.0, 2.0, 0.0, 3.0]) == [1.0, 2.0, 0.0, 3.0]
+
+
+def test_detects_one_hour_meter_lag():
+    h = _hours(200)
+    load = [10.0 if i % 24 in (3, 4) else 0.0 for i in range(200)]
+    total = {t: 1.0 + v for t, v in zip(h, load, strict=False)}
+    late = {
+        t: v for t, v in zip(h[1:], load, strict=False)
+    }  # the meter reports an hour late
+    assert detect_meter_lag(total, late) == 1
+    shifted = shift_meter(late, 1)
+    assert all(math.isclose(total[t] - shifted[t], 1.0) for t in shifted)
+
+
+def test_no_lag_for_a_meter_in_step():
+    h = _hours(200)
+    load = [3.0 if i % 24 == 7 else 0.2 for i in range(200)]
+    total = {t: 1.0 + v for t, v in zip(h, load, strict=False)}
+    assert detect_meter_lag(total, dict(zip(h, load, strict=False))) == 0
+
+
+def test_unrelated_earlier_load_does_not_fake_a_lag():
+    """Codex review: a synchronized sub-load at 18:00 with a larger unrelated
+    load at 17:00 correlates best with the total at lag 1. The meter never
+    exceeds the total, so no lag may be applied."""
+    h = _hours(240)
+    sub = {t: (2.0 if t.hour == 18 else 0.0) for t in h}
+    other = {t: (8.0 if t.hour == 17 else 0.5) for t in h}
+    total = {t: sub[t] + other[t] for t in h}
+    assert detect_meter_lag(total, sub) == 0
+
+
+def test_real_zaptec_meter_lags_one_hour():
+    """The fixture: the EV meter exceeds the total by 102 kWh at lag 0, 0.8 kWh at lag 1."""
+    import csv
+
+    from .fixtures.loader import HOUSE_CSV
+
+    total, ev, hp = {}, {}, {}
+    with HOUSE_CSV.open(newline="") as fh:
+        for row in csv.DictReader(fh):
+            if not all(row[k] for k in ("total_kwh", "heatpump_kwh", "ev_kwh")):
+                continue
+            t = datetime.fromisoformat(row["hour_start_utc"].replace("Z", "+00:00"))
+            total[t], ev[t], hp[t] = (
+                float(row["total_kwh"]),
+                float(row["ev_kwh"]),
+                float(row["heatpump_kwh"]),
+            )
+    assert detect_meter_lag(total, ev) == 1
+    assert detect_meter_lag(total, hp) == 0
+
+
+def test_aligned_meters_improve_the_backtest():
+    old = backtest.run(aligned=False)
+    new = backtest.run(aligned=True)
+    assert backtest.mape(new, "loadcast") < backtest.mape(old, "loadcast")
+    assert abs(backtest.bias(new)) < abs(backtest.bias(old))

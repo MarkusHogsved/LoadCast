@@ -135,7 +135,8 @@ Gotchas found so far:
   CHANGELOG section) when the manifest version changes on `main`.
 - Pushing tags directly from the earlier automation environment was
   blocked (403), which is why releases go through the workflow.
-- Released: 0.1.0, 0.1.1, 0.1.2. 0.1.3 adds `loadcast.mark_change`.
+- Released: 0.1.0 – 0.1.5. 0.1.6 realigns late sub-load meters (Zaptec ~1 h)
+  and makes the base load energy-conserving instead of clipping at 0.
 - Commits have been authored as `Markus Hogsved <markus.hogsved@gmail.com>`.
 
 ## Open items / ideas

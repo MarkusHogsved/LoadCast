@@ -40,6 +40,91 @@ NEIGHBOUR_HOUR_WEIGHT = 0.4  # weight of samples one hour away
 OTHER_DAYTYPE_WEIGHT = 0.3  # weight of weekday samples for a weekend slot etc.
 SLOPE_SHRINK_C2 = 1.0  # shrink slope by var / (var + this), in °C²
 MIN_SAMPLES = 24  # fewer usable samples than this → model not ready
+MAX_SHIFT_HOURS = 3  # how far a negative base-load hour may borrow energy
+MAX_METER_LAG_HOURS = 2  # sub-load meters reporting up to this late are realigned
+METER_LAG_MIN_EVIDENCE = (
+    0.02  # meter must exceed the total by 2 % of its energy at lag 0
+)
+METER_LAG_MAX_REMAINING = 0.25  # ... and the chosen lag must remove 75 % of that
+
+
+def _overshoot(
+    total: dict[datetime, float], sub: dict[datetime, float], lag: int
+) -> float:
+    """Energy the sub-load meter shows above the total load, with the meter
+    read ``lag`` hours later. A meter in step with the load can never show
+    more than the total it is part of."""
+    d = timedelta(hours=lag)
+    return sum(max(sub[t + d] - v, 0.0) for t, v in total.items() if t + d in sub)
+
+
+def detect_meter_lag(total: dict[datetime, float], sub: dict[datetime, float]) -> int:
+    """How many hours a sub-load meter reports after the total load sees it.
+
+    The evidence is physical: a sub-load is part of the total, so a meter in
+    step never exceeds it. A late meter does, in the hour after the load ran.
+    The Zaptec charger in the author's house (2026-09-14 – 10-14) exceeds the
+    total by 102 kWh at lag 0 and 0.8 kWh at lag 1; the heat-pump meter never
+    exceeds it. A lag is only applied when the meter exceeds the total by at
+    least ``METER_LAG_MIN_EVIDENCE`` of its energy at lag 0 and the best lag
+    removes at least 75 % of that. Correlation alone is not used: an
+    unrelated larger load an hour earlier would make a correct meter look late.
+    """
+    energy = sum(max(v, 0.0) for v in sub.values())
+    if energy <= 0:
+        return 0
+    over = [_overshoot(total, sub, lag) for lag in range(MAX_METER_LAG_HOURS + 1)]
+    if over[0] < METER_LAG_MIN_EVIDENCE * energy:
+        return 0
+    best = min(range(len(over)), key=lambda lag: (over[lag], lag))
+    if best and over[best] <= METER_LAG_MAX_REMAINING * over[0]:
+        return best
+    return 0
+
+
+def shift_meter(sub: dict[datetime, float], lag: int) -> dict[datetime, float]:
+    """Move a late meter's readings ``lag`` hours earlier (to when the load ran)."""
+    if not lag:
+        return dict(sub)
+    d = timedelta(hours=lag)
+    return {t - d: v for t, v in sub.items()}
+
+
+def reconcile_residual(hours: list[datetime], residual: list[float]) -> list[float]:
+    """Base load per hour from ``total − metered sub-loads``, without losing energy.
+
+    A sub-load meter that reports late (a Zaptec charger counts its energy
+    about an hour after the inverter sees the load) makes the residual too
+    high in one hour and negative in the next. Clipping the negative hours at
+    zero keeps the false peak and adds energy that never existed. Instead a
+    negative hour takes the missing energy back from the hours just before it,
+    then from the hours just after, at most ``MAX_SHIFT_HOURS`` away and only
+    across consecutive hours. Whatever cannot be placed is dropped (clipped).
+    """
+    out = list(residual)
+    n = len(out)
+
+    def consecutive(i: int, j: int) -> bool:
+        lo, hi = min(i, j), max(i, j)
+        return hours[hi] - hours[lo] == timedelta(hours=hi - lo)
+
+    for i in range(n):
+        if out[i] >= 0:
+            continue
+        deficit = -out[i]
+        out[i] = 0.0
+        order = [i - k for k in range(1, MAX_SHIFT_HOURS + 1)] + [
+            i + k for k in range(1, MAX_SHIFT_HOURS + 1)
+        ]
+        for j in order:
+            if deficit <= 0:
+                break
+            if j < 0 or j >= n or out[j] <= 0 or not consecutive(i, j):
+                continue
+            take = min(out[j], deficit)
+            out[j] -= take
+            deficit -= take
+    return out
 
 
 @dataclass(frozen=True)

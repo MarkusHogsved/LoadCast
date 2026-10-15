@@ -1,5 +1,13 @@
 # Fixtures
 
+## house_2026-09-14_2026-10-14.csv
+
+The file below extended with 2026-10-11 13:00 – 2026-10-14 21:00 UTC from the
+same sensors (default fixture since 0.1.6). Note that `ev_kwh` comes from the
+Zaptec meter, which reports about one hour after the load: the 14/10 evening
+charge shows in the total at 17-19 UTC but in `ev_kwh` at 18-20 UTC.
+`load_house()` realigns it like the coordinator does.
+
 ## house_2026-09-14_2026-10-11.csv
 
 Real hourly data from the author's home (Kungälv, Sweden), exported from Home
