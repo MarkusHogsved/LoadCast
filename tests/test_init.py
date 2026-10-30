@@ -318,10 +318,11 @@ async def test_past_keeps_each_hour_as_issued(
     ]
     assert attrs["past"][0] == first
 
-    # Two days on, only the last 48 h remain
+    # 50 h on, both earlier hours are older than 48 h: only the new one remains
     freezer.move_to(NOW + timedelta(hours=50))
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     attrs = hass.states.get("sensor.loadcast_forecast_next_24_h").attributes
-    assert len(attrs["past"]) == 2
-    assert first not in attrs["past"]
+    assert [p["period_start"] for p in attrs["past"]] == [
+        attrs["forecast"][0]["period_start"]
+    ]
