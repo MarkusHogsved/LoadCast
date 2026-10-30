@@ -334,7 +334,7 @@ async def test_replaced_meter_keeps_the_history(
 ) -> None:
     """A sub-load on a new meter with a few hours of statistics keeps its model.
 
-    Without `previous_sensor` LoadCast skips every hour the new meter lacks,
+    Without `previous_sensors` LoadCast skips every hour the new meter lacks,
     so the whole model would start over (not ready for weeks).
     """
     await hass.config.async_set_time_zone("Europe/Stockholm")
@@ -376,7 +376,7 @@ async def test_replaced_meter_keeps_the_history(
                     CONF_SUBLOAD_NAME: "heatpump",
                     CONF_SUBLOAD_SENSOR: NEW_HP,
                     CONF_SUBLOAD_INCLUDE: True,
-                    "previous_sensor": HP,
+                    "previous_sensors": [HP],
                 }
             ]
         },

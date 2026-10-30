@@ -105,6 +105,11 @@ class LoadCastData:
     past: list[HourForecast] = field(default_factory=list)
 
 
+def _meters(subload: dict[str, Any]) -> list[str]:
+    """A sub-load's meters, oldest first, ending with the current one."""
+    return [*subload.get(CONF_SUBLOAD_PREVIOUS, []), subload[CONF_SUBLOAD_SENSOR]]
+
+
 class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
     """Fit once per new hour of statistics, forecast every update."""
 
@@ -261,11 +266,7 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
         )
         conf = self._conf
         total_ids = self._total_ids()
-        sub_ids = [s[CONF_SUBLOAD_SENSOR] for s in self.subloads] + [
-            s[CONF_SUBLOAD_PREVIOUS]
-            for s in self.subloads
-            if s.get(CONF_SUBLOAD_PREVIOUS)
-        ]
+        sub_ids = [m for s in self.subloads for m in _meters(s)]
         temp_id = conf.get(CONF_TEMPERATURE)
         ids = set(total_ids) | set(sub_ids) | ({temp_id} if temp_id else set())
 
@@ -313,22 +314,25 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
         else:
             total = hourly(conf[CONF_TOTAL])
 
-        subs = {
-            s[CONF_SUBLOAD_NAME]: hand_over(
-                hourly(s[CONF_SUBLOAD_PREVIOUS]), hourly(s[CONF_SUBLOAD_SENSOR])
-            )
-            if s.get(CONF_SUBLOAD_PREVIOUS)
-            else hourly(s[CONF_SUBLOAD_SENSOR])
-            for s in self.subloads
-        }
         # A meter that reports late (Zaptec: ~1 h) shows more than the total in
         # the hour after the load; it is moved back to when the load ran, otherwise the base load gets a false peak in the
-        # charging hour and negative hours after it.
+        # charging hour and negative hours after it. Each meter of a replaced
+        # sub-load is aligned on its own before the hand-over: an old and a new
+        # meter can be late by different amounts.
         self.meter_lags = {}
-        for name in list(subs):
-            lag = detect_meter_lag(total, subs[name])
-            self.meter_lags[name] = lag
-            subs[name] = shift_meter(subs[name], lag)
+        subs: dict[str, dict[datetime, float]] = {}
+        for s in self.subloads:
+            merged: dict[datetime, float] | None = None
+            lag = 0
+            for meter in _meters(s):
+                readings = hourly(meter)
+                lag = detect_meter_lag(total, readings)
+                readings = shift_meter(readings, lag)
+                merged = (
+                    readings if merged is None else hand_over(merged, readings)
+                )
+            subs[s[CONF_SUBLOAD_NAME]] = merged or {}
+            self.meter_lags[s[CONF_SUBLOAD_NAME]] = lag  # the current meter's
 
         series: dict[str, list[Sample]] = {BASE_COMPONENT: []}
         for name in subs:

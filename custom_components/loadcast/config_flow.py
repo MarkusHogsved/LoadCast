@@ -207,8 +207,10 @@ class LoadCastOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Move a sub-load to a new meter without losing its history.
 
-        The old meter becomes `previous_sensor` and covers the hours before
-        the new one's first full hour. Name, total flag and change marker stay.
+        The old meter joins `previous_sensors` (oldest first) and covers the
+        hours up to the new one's first full hour, so a second replacement
+        keeps the first meter's history too. Name, total flag and change
+        marker stay.
         """
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -217,14 +219,21 @@ class LoadCastOptionsFlow(OptionsFlow):
             current = next(
                 s for s in self._subloads() if s[CONF_SUBLOAD_NAME] == name
             )
-            if new == current[CONF_SUBLOAD_SENSOR]:
+            used = [
+                current[CONF_SUBLOAD_SENSOR],
+                *current.get(CONF_SUBLOAD_PREVIOUS, []),
+            ]
+            if new in used:
                 errors[CONF_SUBLOAD_SENSOR] = "same_sensor"
             else:
                 subloads = [
                     {
                         **s,
                         CONF_SUBLOAD_SENSOR: new,
-                        CONF_SUBLOAD_PREVIOUS: s[CONF_SUBLOAD_SENSOR],
+                        CONF_SUBLOAD_PREVIOUS: [
+                            *s.get(CONF_SUBLOAD_PREVIOUS, []),
+                            s[CONF_SUBLOAD_SENSOR],
+                        ],
                     }
                     if s[CONF_SUBLOAD_NAME] == name
                     else s
