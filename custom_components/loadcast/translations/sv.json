@@ -43,6 +43,7 @@
         "title": "LoadCast-alternativ",
         "menu_options": {
           "add_subload": "Lägg till en mätt dellast",
+          "replace_meter": "Byt mätare för en dellast",
           "remove_subload": "Ta bort en dellast",
           "settings": "Modellinställningar"
         }
@@ -54,6 +55,14 @@
           "name": "Namn",
           "sensor": "Energisensor",
           "include_in_total": "Räkna med i totalprognosen"
+        }
+      },
+      "replace_meter": {
+        "title": "Byt mätare",
+        "description": "Dellasten behåller namn och historik: den gamla mätaren används fram till den nya mätarens första hela timme, den nya därefter. Använd det när en last får en ny eller egen mätare.",
+        "data": {
+          "name": "Dellast",
+          "sensor": "Ny energisensor"
         }
       },
       "remove_subload": {
@@ -72,7 +81,8 @@
       }
     },
     "error": {
-      "invalid_name": "Använd ett unikt namn (inte 'base')."
+      "invalid_name": "Använd ett unikt namn (inte 'base').",
+      "same_sensor": "Det är redan dellastens mätare."
     }
   },
   "selector": {

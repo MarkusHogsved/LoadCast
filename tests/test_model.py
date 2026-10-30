@@ -14,6 +14,7 @@ from custom_components.loadcast.model import (
     Sample,
     TransitionModel,
     detect_meter_lag,
+    hand_over,
     reconcile_residual,
     shift_meter,
 )
@@ -339,3 +340,41 @@ def test_aligned_meters_improve_the_backtest():
     new = backtest.run(aligned=True)
     assert backtest.mape(new, "loadcast") < backtest.mape(old, "loadcast")
     assert abs(backtest.bias(new)) < abs(backtest.bias(old))
+
+
+def test_hand_over_keeps_the_old_meter_up_to_the_new_ones_first_full_hour():
+    t0 = datetime(2026, 10, 30, 0, tzinfo=TZ)
+    hours = [t0 + timedelta(hours=i) for i in range(6)]
+    old = {t: 1.0 for t in hours}
+    new = {t: 2.0 for t in hours[3:]}  # installed during hour 3 (partial)
+    merged = hand_over(old, new)
+    assert [merged[t] for t in hours] == [1.0, 1.0, 1.0, 1.0, 2.0, 2.0]
+
+
+def test_hand_over_without_new_readings_is_the_old_meter():
+    t0 = datetime(2026, 10, 30, 0, tzinfo=TZ)
+    old = {t0 + timedelta(hours=i): 1.0 for i in range(3)}
+    assert hand_over(old, {}) == old
+    # The new meter's partial first hour is never used
+    assert hand_over({}, {t0: 2.0}) == {}
+
+
+def test_meters_with_different_lags_are_aligned_before_the_hand_over():
+    """An old meter one hour late and a new one in step (Codex #6)."""
+    t0 = datetime(2026, 10, 1, 0, tzinfo=TZ)
+    hours = [t0 + timedelta(hours=i) for i in range(24 * 12)]
+    # 1 kWh base, 7 kWh of charging every day 02:00-03:00
+    load = {t: 7.0 if t.hour == 2 else 0.0 for t in hours}
+    total = {t: 1.0 + load[t] for t in hours}
+    cut = hours[24 * 9]
+    old = {t + timedelta(hours=1): v for t, v in load.items() if t < cut}  # late
+    new = {t: v for t, v in load.items() if t >= cut}  # in step
+    lag_old, lag_new = detect_meter_lag(total, old), detect_meter_lag(total, new)
+    assert (lag_old, lag_new) == (1, 0)
+    merged = hand_over(shift_meter(old, lag_old), shift_meter(new, lag_new))
+    assert all(merged[t] == load[t] for t in merged)
+    # Merging first and detecting once applies one lag to both meters, so
+    # either the old meter's or the new meter's readings end up misplaced
+    raw = hand_over(old, new)
+    shifted = shift_meter(raw, detect_meter_lag(total, raw))
+    assert any(v != load.get(t) for t, v in shifted.items())

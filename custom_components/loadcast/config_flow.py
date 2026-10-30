@@ -27,6 +27,7 @@ from .const import (
     CONF_SOLAR,
     CONF_SUBLOAD_INCLUDE,
     CONF_SUBLOAD_NAME,
+    CONF_SUBLOAD_PREVIOUS,
     CONF_SUBLOAD_SENSOR,
     CONF_SUBLOADS,
     CONF_TEMPERATURE,
@@ -165,7 +166,7 @@ class LoadCastOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         menu = ["add_subload", "settings"]
         if self._subloads():
-            menu.insert(1, "remove_subload")
+            menu[1:1] = ["replace_meter", "remove_subload"]
         return self.async_show_menu(step_id="init", menu_options=menu)
 
     async def async_step_add_subload(
@@ -196,6 +197,59 @@ class LoadCastOptionsFlow(OptionsFlow):
                     vol.Required(CONF_SUBLOAD_NAME): str,
                     vol.Required(CONF_SUBLOAD_SENSOR): ENERGY_SENSOR,
                     vol.Required(CONF_SUBLOAD_INCLUDE, default=True): bool,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_replace_meter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Move a sub-load to a new meter without losing its history.
+
+        The old meter joins `previous_sensors` (oldest first) and covers the
+        hours up to the new one's first full hour, so a second replacement
+        keeps the first meter's history too. Name, total flag and change
+        marker stay.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            name = user_input[CONF_SUBLOAD_NAME]
+            new = user_input[CONF_SUBLOAD_SENSOR]
+            current = next(
+                s for s in self._subloads() if s[CONF_SUBLOAD_NAME] == name
+            )
+            used = [
+                current[CONF_SUBLOAD_SENSOR],
+                *current.get(CONF_SUBLOAD_PREVIOUS, []),
+            ]
+            if new in used:
+                errors[CONF_SUBLOAD_SENSOR] = "same_sensor"
+            else:
+                subloads = [
+                    {
+                        **s,
+                        CONF_SUBLOAD_SENSOR: new,
+                        CONF_SUBLOAD_PREVIOUS: [
+                            *s.get(CONF_SUBLOAD_PREVIOUS, []),
+                            s[CONF_SUBLOAD_SENSOR],
+                        ],
+                    }
+                    if s[CONF_SUBLOAD_NAME] == name
+                    else s
+                    for s in self._subloads()
+                ]
+                return self._save(**{CONF_SUBLOADS: subloads})
+        return self.async_show_form(
+            step_id="replace_meter",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_SUBLOAD_NAME): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[s[CONF_SUBLOAD_NAME] for s in self._subloads()]
+                        )
+                    ),
+                    vol.Required(CONF_SUBLOAD_SENSOR): ENERGY_SENSOR,
                 }
             ),
             errors=errors,

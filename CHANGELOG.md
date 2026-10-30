@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.8
+
+- Options: *Replace a sub-load's meter*. The old meter joins
+  `previous_sensors` (oldest first, so a second replacement keeps the first
+  meter's history too) and covers the hours up to the new meter's first full
+  hour (the first one is usually partial); the new meter counts from then
+  on. Each meter's reporting delay is detected and corrected on its own
+  before the hand-over. Name, total flag and change marker stay. LoadCast only uses hours that
+  every meter covers, so switching the sensor of a sub-load used to drop all
+  history before the new meter's first statistics and leave the model not
+  ready for weeks. Prompted by the author's heat pump getting its own Shelly
+  (the old meter was a whole circuit that also charges a UPS).
+
 ## 0.1.7
 
 - The forecast sensor gets `past`: each of the last 48 hours as forecast
