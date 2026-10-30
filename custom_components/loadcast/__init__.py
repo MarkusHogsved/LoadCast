@@ -167,6 +167,9 @@ async def _async_reload(hass: HomeAssistant, entry: LoadCastConfigEntry) -> None
 
 async def async_unload_entry(hass: HomeAssistant, entry: LoadCastConfigEntry) -> bool:
     """Unload a config entry."""
+    # No delayed save may outlive the entry (it would bring the file back
+    # after async_remove_entry has deleted it)
+    await entry.runtime_data.async_flush_past()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 

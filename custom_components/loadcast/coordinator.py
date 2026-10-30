@@ -206,6 +206,11 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
             self._past_store.async_delay_save(self._past_rows, 60)
         data.past = [self._past[t] for t in sorted(self._past)]
 
+    async def async_flush_past(self) -> None:
+        """Write the past forecasts now, cancelling the delayed save."""
+        if self._past_loaded:
+            await self._past_store.async_save(self._past_rows())
+
     def _past_rows(self) -> list[dict[str, Any]]:
         return [
             {"start": h.start.isoformat(), "kwh": h.kwh, "p10": h.p10, "p90": h.p90}
