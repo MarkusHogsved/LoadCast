@@ -288,3 +288,40 @@ async def test_mark_change_rejects_unknown_component_and_future(
             blocking=True,
         )
     assert "change_markers" not in setup_entry.options
+
+
+async def test_past_keeps_each_hour_as_issued(
+    hass: HomeAssistant, setup_entry, freezer: FrozenDateTimeFactory
+) -> None:
+    """`past` holds every hour's forecast from when the hour began."""
+    coordinator = setup_entry.runtime_data
+    attrs = hass.states.get("sensor.loadcast_forecast_next_24_h").attributes
+    assert len(attrs["past"]) == 1
+    first = attrs["past"][0]
+    assert first == attrs["forecast"][0]
+
+    # Later in the same hour: the issued value for this hour stays put
+    freezer.move_to(NOW + timedelta(minutes=20))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    attrs = hass.states.get("sensor.loadcast_forecast_next_24_h").attributes
+    assert attrs["past"] == [first]
+
+    # A new hour adds its own forecast, the earlier one is kept as it was
+    freezer.move_to(NOW + timedelta(hours=1))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    attrs = hass.states.get("sensor.loadcast_forecast_next_24_h").attributes
+    assert [p["period_start"] for p in attrs["past"]] == [
+        first["period_start"],
+        attrs["forecast"][0]["period_start"],
+    ]
+    assert attrs["past"][0] == first
+
+    # Two days on, only the last 48 h remain
+    freezer.move_to(NOW + timedelta(hours=50))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    attrs = hass.states.get("sensor.loadcast_forecast_next_24_h").attributes
+    assert len(attrs["past"]) == 2
+    assert first not in attrs["past"]

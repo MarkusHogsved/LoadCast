@@ -135,7 +135,7 @@ Gotchas found so far:
   CHANGELOG section) when the manifest version changes on `main`.
 - Pushing tags directly from the earlier automation environment was
   blocked (403), which is why releases go through the workflow.
-- Released: 0.1.0 – 0.1.5. 0.1.6 realigns late sub-load meters (Zaptec ~1 h)
+- Released: 0.1.0 – 0.1.6. 0.1.7 adds `past` (forecast as issued per hour). 0.1.6 realigns late sub-load meters (Zaptec ~1 h)
   and makes the base load energy-conserving instead of clipping at 0.
 - Commits have been authored as `Markus Hogsved <markus.hogsved@gmail.com>`.
 

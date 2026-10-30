@@ -61,6 +61,19 @@ def _forecast_attrs(c: LoadCastCoordinator) -> dict[str, Any]:
             }
             for h in data.hours
         ],
+        # The same hours as issued when each began, oldest first: forecast
+        # versus outcome without the recorder (these attributes are not recorded)
+        "past": [
+            {
+                "period_start": h.start.astimezone(
+                    dt_util.get_default_time_zone()
+                ).isoformat(),
+                "kwh": round(h.kwh, 3),
+                "kwh_p10": round(h.p10, 3),
+                "kwh_p90": round(h.p90, 3),
+            }
+            for h in data.past
+        ],
         "components": {
             name: {
                 "included_in_total": info.included,
@@ -156,7 +169,7 @@ class LoadCastSensor(CoordinatorEntity[LoadCastCoordinator], SensorEntity):
     _attr_has_entity_name = True
     # The forecast list is large and changes every update; keep it out of the
     # recorder database.
-    _unrecorded_attributes = frozenset({"forecast", "components", "days"})
+    _unrecorded_attributes = frozenset({"forecast", "components", "days", "past"})
 
     def __init__(
         self, coordinator: LoadCastCoordinator, description: LoadCastSensorDescription
