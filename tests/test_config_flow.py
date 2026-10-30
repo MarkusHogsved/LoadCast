@@ -130,6 +130,55 @@ async def test_options_add_and_remove_subload(hass: HomeAssistant) -> None:
     assert entry.options[CONF_SUBLOADS] == []
 
 
+async def test_options_replace_meter_keeps_history_via_previous_sensor(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_LOAD_MODE: LOAD_MODE_SENSOR, CONF_TOTAL: "sensor.house"},
+        options={
+            CONF_SUBLOADS: [
+                {
+                    CONF_SUBLOAD_NAME: "Heat pump",
+                    CONF_SUBLOAD_SENSOR: "sensor.circuit_energy",
+                    CONF_SUBLOAD_INCLUDE: True,
+                }
+            ],
+            "change_markers": {"Heat pump": "2026-10-12T19:45:00+00:00"},
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "replace_meter" in result["menu_options"]
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "replace_meter"}
+    )
+    # The current meter again is rejected
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_SUBLOAD_NAME: "Heat pump", CONF_SUBLOAD_SENSOR: "sensor.circuit_energy"},
+    )
+    assert result["errors"] == {CONF_SUBLOAD_SENSOR: "same_sensor"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_SUBLOAD_NAME: "Heat pump", CONF_SUBLOAD_SENSOR: "sensor.hp_energy"},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SUBLOADS] == [
+        {
+            CONF_SUBLOAD_NAME: "Heat pump",
+            CONF_SUBLOAD_SENSOR: "sensor.hp_energy",
+            CONF_SUBLOAD_INCLUDE: True,
+            "previous_sensor": "sensor.circuit_energy",
+        }
+    ]
+    # The change marker stays
+    assert entry.options["change_markers"] == {
+        "Heat pump": "2026-10-12T19:45:00+00:00"
+    }
+
+
 async def test_options_settings_shows_current_values_and_stores_ints(
     hass: HomeAssistant,
 ) -> None:

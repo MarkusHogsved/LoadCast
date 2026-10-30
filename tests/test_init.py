@@ -40,6 +40,7 @@ POWER = "sensor.house_load_power"
 HP = "sensor.heat_pump_energy"
 EV = "sensor.ev_charger_energy"
 TEMP = "sensor.outdoor_temperature"
+NEW_HP = "sensor.heat_pump_own_meter"
 
 
 def _import(hass: HomeAssistant) -> None:
@@ -326,3 +327,67 @@ async def test_past_keeps_each_hour_as_issued(
     assert [p["period_start"] for p in attrs["past"]] == [
         attrs["forecast"][0]["period_start"]
     ]
+
+
+async def test_replaced_meter_keeps_the_history(
+    recorder_mock: Recorder, hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A sub-load on a new meter with a few hours of statistics keeps its model.
+
+    Without `previous_sensor` LoadCast skips every hour the new meter lacks,
+    so the whole model would start over (not ready for weeks).
+    """
+    await hass.config.async_set_time_zone("Europe/Stockholm")
+    freezer.move_to(NOW)
+    _import(hass)
+    hp = load_house()["heatpump"]
+    recent = hp[-6:]  # the new meter: installed during the 6th hour from the end
+    sums = list(accumulate(s.kwh for s in recent))
+    async_import_statistics(
+        hass,
+        {
+            "has_mean": False,
+            "mean_type": StatisticMeanType.NONE,
+            "has_sum": True,
+            "name": None,
+            "source": "recorder",
+            "statistic_id": NEW_HP,
+            "unit_class": "energy",
+            "unit_of_measurement": "kWh",
+        },
+        [
+            {"start": s.start, "sum": total_sum, "state": total_sum}
+            for s, total_sum in zip(recent, sums, strict=True)
+        ],
+    )
+    await async_wait_recording_done(hass)
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="LoadCast",
+        data={
+            CONF_LOAD_MODE: LOAD_MODE_SENSOR,
+            CONF_TOTAL: POWER,
+            CONF_TEMPERATURE: TEMP,
+        },
+        options={
+            CONF_SUBLOADS: [
+                {
+                    CONF_SUBLOAD_NAME: "heatpump",
+                    CONF_SUBLOAD_SENSOR: NEW_HP,
+                    CONF_SUBLOAD_INCLUDE: True,
+                    "previous_sensor": HP,
+                }
+            ]
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    attrs = hass.states.get("sensor.loadcast_forecast_next_24_h").attributes
+    assert attrs["ready"] is True
+    comps = attrs["components"]
+    # The full history is there, not just the new meter's hours
+    assert comps["heatpump"]["samples"] > 24 * 20
+    assert comps["base"]["samples"] == comps["heatpump"]["samples"]

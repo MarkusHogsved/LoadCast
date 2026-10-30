@@ -541,3 +541,21 @@ def _weighted_quantile(values: list[tuple[float, float]], q: float) -> float:
         if acc >= target:
             return v
     return pairs[-1][0]
+
+
+def hand_over(
+    previous: dict[datetime, float], current: dict[datetime, float]
+) -> dict[datetime, float]:
+    """One sub-load from two meters: the previous one up to the hand-over.
+
+    The current meter's first hour is usually partial (installed mid-hour),
+    so the previous meter keeps that hour too; from the next hour on only the
+    current meter counts. Without a current reading yet, the previous meter
+    covers everything.
+    """
+    if not current:
+        return dict(previous)
+    first = min(current)
+    merged = {t: v for t, v in previous.items() if t <= first}
+    merged.update({t: v for t, v in current.items() if t > first})
+    return merged

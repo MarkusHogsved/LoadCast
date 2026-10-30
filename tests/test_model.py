@@ -14,6 +14,7 @@ from custom_components.loadcast.model import (
     Sample,
     TransitionModel,
     detect_meter_lag,
+    hand_over,
     reconcile_residual,
     shift_meter,
 )
@@ -339,3 +340,20 @@ def test_aligned_meters_improve_the_backtest():
     new = backtest.run(aligned=True)
     assert backtest.mape(new, "loadcast") < backtest.mape(old, "loadcast")
     assert abs(backtest.bias(new)) < abs(backtest.bias(old))
+
+
+def test_hand_over_keeps_the_old_meter_up_to_the_new_ones_first_full_hour():
+    t0 = datetime(2026, 10, 30, 0, tzinfo=TZ)
+    hours = [t0 + timedelta(hours=i) for i in range(6)]
+    old = {t: 1.0 for t in hours}
+    new = {t: 2.0 for t in hours[3:]}  # installed during hour 3 (partial)
+    merged = hand_over(old, new)
+    assert [merged[t] for t in hours] == [1.0, 1.0, 1.0, 1.0, 2.0, 2.0]
+
+
+def test_hand_over_without_new_readings_is_the_old_meter():
+    t0 = datetime(2026, 10, 30, 0, tzinfo=TZ)
+    old = {t0 + timedelta(hours=i): 1.0 for i in range(3)}
+    assert hand_over(old, {}) == old
+    # The new meter's partial first hour is never used
+    assert hand_over({}, {t0: 2.0}) == {}

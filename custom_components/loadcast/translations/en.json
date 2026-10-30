@@ -43,6 +43,7 @@
         "title": "LoadCast options",
         "menu_options": {
           "add_subload": "Add a metered sub-load",
+          "replace_meter": "Replace a sub-load's meter",
           "remove_subload": "Remove a sub-load",
           "settings": "Model settings"
         }
@@ -54,6 +55,14 @@
           "name": "Name",
           "sensor": "Energy sensor",
           "include_in_total": "Include in total forecast"
+        }
+      },
+      "replace_meter": {
+        "title": "Replace meter",
+        "description": "The sub-load keeps its name and history: the old meter is used up to the new one's first full hour, the new one from then on. Use it when a load gets a new or dedicated meter.",
+        "data": {
+          "name": "Sub-load",
+          "sensor": "New energy sensor"
         }
       },
       "remove_subload": {
@@ -72,7 +81,8 @@
       }
     },
     "error": {
-      "invalid_name": "Use a unique name (not 'base')."
+      "invalid_name": "Use a unique name (not 'base').",
+      "same_sensor": "That is already the sub-load's meter."
     }
   },
   "selector": {

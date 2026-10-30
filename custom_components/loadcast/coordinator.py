@@ -25,6 +25,7 @@ from .const import (
     CONF_LOAD_MODE,
     CONF_SUBLOAD_INCLUDE,
     CONF_SUBLOAD_NAME,
+    CONF_SUBLOAD_PREVIOUS,
     CONF_SUBLOAD_SENSOR,
     CONF_SUBLOADS,
     CONF_TEMPERATURE,
@@ -43,6 +44,7 @@ from .model import (
     Sample,
     TransitionModel,
     detect_meter_lag,
+    hand_over,
     reconcile_residual,
     shift_meter,
 )
@@ -259,7 +261,11 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
         )
         conf = self._conf
         total_ids = self._total_ids()
-        sub_ids = [s[CONF_SUBLOAD_SENSOR] for s in self.subloads]
+        sub_ids = [s[CONF_SUBLOAD_SENSOR] for s in self.subloads] + [
+            s[CONF_SUBLOAD_PREVIOUS]
+            for s in self.subloads
+            if s.get(CONF_SUBLOAD_PREVIOUS)
+        ]
         temp_id = conf.get(CONF_TEMPERATURE)
         ids = set(total_ids) | set(sub_ids) | ({temp_id} if temp_id else set())
 
@@ -308,7 +314,12 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
             total = hourly(conf[CONF_TOTAL])
 
         subs = {
-            s[CONF_SUBLOAD_NAME]: hourly(s[CONF_SUBLOAD_SENSOR]) for s in self.subloads
+            s[CONF_SUBLOAD_NAME]: hand_over(
+                hourly(s[CONF_SUBLOAD_PREVIOUS]), hourly(s[CONF_SUBLOAD_SENSOR])
+            )
+            if s.get(CONF_SUBLOAD_PREVIOUS)
+            else hourly(s[CONF_SUBLOAD_SENSOR])
+            for s in self.subloads
         }
         # A meter that reports late (Zaptec: ~1 h) shows more than the total in
         # the hour after the load; it is moved back to when the load ran, otherwise the base load gets a false peak in the

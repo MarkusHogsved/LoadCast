@@ -41,6 +41,9 @@ CONF_SUBLOADS = "subloads"  # list of {name, sensor, include_in_total}
 CONF_SUBLOAD_NAME = "name"
 CONF_SUBLOAD_SENSOR = "sensor"
 CONF_SUBLOAD_INCLUDE = "include_in_total"
+# The meter a sub-load had before its current one: used for the hours before
+# the current meter's first full hour, so a new meter keeps the history.
+CONF_SUBLOAD_PREVIOUS = "previous_sensor"
 CONF_WINDOW_DAYS = "window_days"
 CONF_HORIZON_HOURS = "horizon_hours"
 # {component name: ISO timestamp} – history before it is ignored for that

@@ -73,6 +73,11 @@ It uses up to 28 days by default.
 
 - *Add a metered sub-load* – name + energy sensor, and whether it counts in
   the total. The base load is total minus all sub-loads.
+- *Replace a sub-load's meter* – when a load gets a new (or its own) meter.
+  The sub-load keeps its name, history and change marker: the old meter is
+  used up to the new one's first full hour, the new one from then on.
+  Without it, a new meter with a few hours of statistics would empty the
+  model, since LoadCast only uses hours that every meter covers.
 - *Model settings* – history window, forecast horizon.
 
 ## Entities
