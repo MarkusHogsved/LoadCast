@@ -12,6 +12,7 @@ from homeassistant.components.recorder.statistics import statistics_during_perio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfPower, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -51,6 +52,9 @@ _LOGGER = logging.getLogger(__name__)
 # Extra history beyond the model window: the adaptive model replays the last
 # few days, and accuracy reporting needs a week.
 HISTORY_MARGIN_DAYS = 8
+# Hours of issued forecasts kept for forecast-versus-outcome charts.
+PAST_HOURS = 48
+PAST_STORE_VERSION = 1
 POWER_UNITS = {u.value for u in UnitOfPower}
 
 type LoadCastConfigEntry = ConfigEntry["LoadCastCoordinator"]
@@ -96,6 +100,7 @@ class LoadCastData:
     accuracy_yesterday_pct: float | None = None
     bias_7d_kwh: float | None = None
     error_days: list[dict[str, Any]] = field(default_factory=list)
+    past: list[HourForecast] = field(default_factory=list)
 
 
 class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
@@ -120,6 +125,13 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
             None,
             [],
         )
+        # Each hour's forecast as it stood when the hour began (the first
+        # update in the hour), kept across restarts.
+        self._past: dict[datetime, HourForecast] = {}
+        self._past_store: Store[list[dict[str, Any]]] = Store(
+            hass, PAST_STORE_VERSION, f"{DOMAIN}.{entry.entry_id}.past"
+        )
+        self._past_loaded = False
 
     # ----------------------------------------------------------- config
 
@@ -166,7 +178,44 @@ class LoadCastCoordinator(DataUpdateCoordinator[LoadCastData]):
             self._last_fit_hour = hour
 
         temps = await self._async_forecast_temperatures(hour)
-        return self._build(hour, temps)
+        data = self._build(hour, temps)
+        await self._async_record_past(hour, data)
+        return data
+
+    async def _async_record_past(self, hour: datetime, data: LoadCastData) -> None:
+        """Keep this hour's forecast as issued at its start, publish the last 48 h."""
+        if not self._past_loaded:
+            self._past_loaded = True
+            for row in await self._past_store.async_load() or []:
+                start = dt_util.parse_datetime(str(row.get("start", "")))
+                if start is not None:
+                    self._past[dt_util.as_utc(start)] = HourForecast(
+                        start=dt_util.as_utc(start),
+                        kwh=float(row["kwh"]),
+                        p10=float(row["p10"]),
+                        p90=float(row["p90"]),
+                    )
+        hour_u = dt_util.as_utc(hour)
+        if data.hours and hour_u not in self._past:
+            first = data.hours[0]
+            self._past[hour_u] = HourForecast(
+                start=first.start, kwh=first.kwh, p10=first.p10, p90=first.p90
+            )
+            cutoff = hour_u - timedelta(hours=PAST_HOURS)
+            self._past = {t: h for t, h in self._past.items() if t >= cutoff}
+            self._past_store.async_delay_save(self._past_rows, 60)
+        data.past = [self._past[t] for t in sorted(self._past)]
+
+    async def async_flush_past(self) -> None:
+        """Write the past forecasts now, cancelling the delayed save."""
+        if self._past_loaded:
+            await self._past_store.async_save(self._past_rows())
+
+    def _past_rows(self) -> list[dict[str, Any]]:
+        return [
+            {"start": h.start.isoformat(), "kwh": h.kwh, "p10": h.p10, "p90": h.p90}
+            for h in self._past.values()
+        ]
 
     async def _async_refit(self, now: datetime) -> None:
         """Load statistics and fit one model per component."""

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.7
+
+- The forecast sensor gets `past`: each of the last 48 hours as forecast
+  when the hour began (the first update in the hour), oldest first, in the
+  same shape as `forecast`. The forecast attributes are not recorded, so
+  this is the only way to chart forecast against outcome. Kept across
+  restarts in `.storage/loadcast.<entry id>.past`, which is removed with the
+  entry. Not recorded either.
+
 ## 0.1.6
 
 - Sub-load meters that report late are realigned. A sub-load is part of the

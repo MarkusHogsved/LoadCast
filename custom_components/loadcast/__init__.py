@@ -13,6 +13,7 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import ConfigEntryError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
@@ -34,7 +35,7 @@ from .const import (
     SERVICE_GET_FORECAST,
     SERVICE_MARK_CHANGE,
 )
-from .coordinator import LoadCastConfigEntry, LoadCastCoordinator
+from .coordinator import PAST_STORE_VERSION, LoadCastConfigEntry, LoadCastCoordinator
 
 PLATFORMS = [Platform.SENSOR]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -166,4 +167,13 @@ async def _async_reload(hass: HomeAssistant, entry: LoadCastConfigEntry) -> None
 
 async def async_unload_entry(hass: HomeAssistant, entry: LoadCastConfigEntry) -> bool:
     """Unload a config entry."""
+    # No delayed save may outlive the entry (it would bring the file back
+    # after async_remove_entry has deleted it)
+    await entry.runtime_data.async_flush_past()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: LoadCastConfigEntry) -> None:
+    """Delete the stored past forecasts with the entry."""
+    store = Store(hass, PAST_STORE_VERSION, f"{DOMAIN}.{entry.entry_id}.past")
+    await store.async_remove()
